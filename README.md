@@ -50,7 +50,20 @@ uv run pytest    # 28 个单测（外部 HTTP 全部 mock）
 | 变量 | 默认 | 说明 |
 |------|------|------|
 | SILICONFLOW_API_KEY | - | 硅基流动 Key（ASR+LLM 共用） |
-| ASR_MODEL | FunAudioLLM/SenseVoiceSmall | 语音识别模型 |
+| ASR_PROVIDER | siliconflow | `siliconflow`（云端 SenseVoice）或 `whisper`（本地 faster-whisper，离线可用） |
+| WHISPER_MODEL | base | 本地 whisper 模型（tiny/base/small） |
+| ASR_MODEL | FunAudioLLM/SenseVoiceSmall | 云端语音识别模型 |
+| LLM_API_KEY | - | LLM Key（缺省回退 SILICONFLOW_API_KEY） |
+| LLM_BASE_URL | https://api.siliconflow.cn/v1 | OpenAI 兼容端点（可换 deepseek.com 等） |
 | LLM_MODEL | deepseek-ai/DeepSeek-V3 | 笔记整理模型 |
 | NOTES_DIR | notes | 笔记输出目录 |
 | QUEUE_FILE | data/queue.txt | 链接队列文件 |
+
+## 端到端验证
+
+```bash
+uv run python scripts/e2e_local.py   # TTS 语音 -> ASR -> LLM -> 笔记 -> git，全真实链路
+```
+
+注意：抖音分享页解析依赖国内网络出口（分享页按 UA+地域做 SSR，需 Android UA，代码已内置）；
+海外出口会被风控返回空数据。`scripts/e2e_local.py` 用 meta_override 跳过该跳验证其余链路。

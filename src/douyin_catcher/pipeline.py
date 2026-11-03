@@ -33,15 +33,19 @@ async def process_link(
     notes_dir: str | Path | None = None,
     work_dir: str | Path | None = None,
     skip_git: bool = False,
+    meta_override: dict | None = None,
 ) -> Path:
-    """端到端处理一条分享文本，返回生成的笔记路径。"""
+    """端到端处理一条分享文本，返回生成的笔记路径。
+
+    meta_override: 直接提供元数据（跳过抖音解析），用于测试或网络受限场景。
+    """
     notes_dir = Path(notes_dir or config.NOTES_DIR)
     work_dir = Path(work_dir or config.DOWNLOAD_DIR)
     run_id = uuid.uuid4().hex[:8]
     run_work = work_dir / run_id
     run_work.mkdir(parents=True, exist_ok=True)
 
-    meta = await parse_share_text(share_text)
+    meta = meta_override or await parse_share_text(share_text)
     if not meta.get("video_url"):
         raise ValueError("未取得视频下载地址（可能为图文或受限内容）")
 

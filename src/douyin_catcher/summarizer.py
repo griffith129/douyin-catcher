@@ -26,10 +26,10 @@ SUMMARY_PROMPT = """你是知识整理助手。下面是一条抖音知识类视
 async def summarize(
     title: str, author: str, transcript: str, api_key: str | None = None
 ) -> str:
-    api_key = api_key or config.SILICONFLOW_API_KEY
+    api_key = api_key or config.LLM_API_KEY or config.SILICONFLOW_API_KEY
     if not api_key:
-        raise RuntimeError("缺少 SILICONFLOW_API_KEY")
-    url = f"{config.SILICONFLOW_BASE_URL}/chat/completions"
+        raise RuntimeError("缺少 LLM_API_KEY / SILICONFLOW_API_KEY")
+    url = f"{config.LLM_BASE_URL}/chat/completions"
     payload = {
         "model": config.LLM_MODEL,
         "messages": [

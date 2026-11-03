@@ -12,7 +12,7 @@ import httpx
 from .config import config
 
 URL_RE = re.compile(r"https?://[^\s，,。；;）)】\]]+")
-VIDEO_ID_RE = re.compile(r"/video/(\d{15,21})")
+VIDEO_ID_RE = re.compile(r"/(?:video|note|slides)/(\d{15,21})")
 MODAL_ID_RE = re.compile(r"modal_id=(\d{15,21})")
 ROUTER_DATA_RE = re.compile(r"window\._ROUTER_DATA\s*=\s*(\{.*?\})\s*;?\s*</script>", re.S)
 
@@ -40,7 +40,20 @@ def _parse_router_data(html: str) -> dict:
 
 def _info_from_router_data(data: dict) -> dict:
     loader = data.get("loaderData", {})
-    res = next(iter(loader.values()), {}).get("videoInfoRes", {})
+    res = None
+    for key in ("video_(id)/page", "note_(id)/page"):
+        page = loader.get(key)
+        if isinstance(page, dict) and page.get("videoInfoRes"):
+            res = page["videoInfoRes"]
+            break
+    if res is None:
+        # 兜底：遍历任意带 videoInfoRes 的页面
+        for page in loader.values():
+            if isinstance(page, dict) and page.get("videoInfoRes"):
+                res = page["videoInfoRes"]
+                break
+    if res is None:
+        raise ValueError("分享页未含视频数据（视频不存在或接口变化）")
     items = res.get("item_list") or []
     if not items:
         raise ValueError("视频不存在或已被删除")

@@ -26,6 +26,9 @@ class Config:
     DOWNLOAD_DIR: str = os.getenv("DOWNLOAD_DIR", "data/downloads")
     DATA_DIR: str = os.getenv("DATA_DIR", "data")
 
+    NOTION_TOKEN: str = os.getenv("NOTION_TOKEN", "")  # integration secret（ntn_ 开头）
+    NOTION_PARENT_PAGE_ID: str = os.getenv("NOTION_PARENT_PAGE_ID", "")
+
     HTTP_TIMEOUT: float = float(os.getenv("HTTP_TIMEOUT", "30"))
     DOWNLOAD_TIMEOUT: float = float(os.getenv("DOWNLOAD_TIMEOUT", "120"))
     BROWSER_TIMEOUT: float = float(os.getenv("BROWSER_TIMEOUT", "30"))

@@ -10,9 +10,23 @@ from .asr import transcribe
 from .audio import extract_audio
 from .config import config
 from .downloader import download_video
-from .note import save_note
+from .note import build_markdown, save_note
+from .notion import upload_note
 from .parser import parse_share_text
 from .summarizer import summarize
+
+
+async def _maybe_upload_to_notion(meta: dict, summary: str, transcript: str) -> str | None:
+    """笔记收录进 Notion（1A）。未配置 token 时跳过，失败不阻塞主流程。"""
+    if not (config.NOTION_TOKEN and config.NOTION_PARENT_PAGE_ID):
+        return None
+    try:
+        md = build_markdown(meta, summary=summary, transcript=transcript)
+        title = meta.get("title") or "抖音视频笔记"
+        return await upload_note(title=title, md=md)
+    except Exception as e:  # ponytail: Notion 故障不应丢掉本地笔记
+        print(f"[notion] 上传失败，已保留本地笔记: {e}")
+        return None
 
 
 def _git_commit(note_path: Path, repo_dir: Path) -> str | None:
@@ -58,6 +72,9 @@ async def process_link(
 
     summary = await summarize(title=meta["title"], author=meta["author"], transcript=transcript)
     note_path = save_note(meta, summary=summary, transcript=transcript, notes_dir=notes_dir)
+    notion_url = await _maybe_upload_to_notion(meta, summary, transcript)
+    if notion_url:
+        print(f"[notion] 笔记已收录: {notion_url}")
 
     shutil.rmtree(run_work, ignore_errors=True)
 

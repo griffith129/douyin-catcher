@@ -68,6 +68,62 @@ class TestPipeline:
         with pytest.raises(ValueError):
             await pipeline.process_link("没有链接", notes_dir=tmp_path, work_dir=tmp_path)
 
+    @respx.mock
+    async def test_process_link_uploads_to_notion_when_configured(self, tmp_path, monkeypatch):
+        _mock_upstream()
+        async def fake_parse(text):
+            return _info_from_detail(DETAIL_DATA)
+        monkeypatch.setattr(pipeline, "parse_share_text", fake_parse)
+        monkeypatch.setattr(pipeline.config, "SILICONFLOW_API_KEY", "sk-test")
+        def fake_extract(video, audio=None):
+            from pathlib import Path
+            audio = Path(video).with_suffix(".mp3")
+            audio.write_bytes(b"fake-audio")
+            return audio
+        monkeypatch.setattr(pipeline, "extract_audio", fake_extract)
+        called = {}
+        async def fake_upload(title, md):
+            called["title"] = title
+            called["md_len"] = len(md)
+            return "https://notion.so/fake"
+        monkeypatch.setattr(pipeline, "upload_note", fake_upload)
+        monkeypatch.setattr(pipeline.config, "NOTION_TOKEN", "ntn_x", raising=False)
+        monkeypatch.setattr(pipeline.config, "NOTION_PARENT_PAGE_ID", "parent-1", raising=False)
+        await pipeline.process_link(
+            "看看 https://v.douyin.com/test1/",
+            notes_dir=tmp_path / "notes",
+            work_dir=tmp_path / "work",
+            skip_git=True,
+        )
+        assert "管线测试视频" in called["title"]
+        assert called["md_len"] > 0
+
+    @respx.mock
+    async def test_process_link_skips_notion_when_unconfigured(self, tmp_path, monkeypatch):
+        _mock_upstream()
+        async def fake_parse(text):
+            return _info_from_detail(DETAIL_DATA)
+        monkeypatch.setattr(pipeline, "parse_share_text", fake_parse)
+        monkeypatch.setattr(pipeline.config, "SILICONFLOW_API_KEY", "sk-test")
+        def fake_extract(video, audio=None):
+            from pathlib import Path
+            audio = Path(video).with_suffix(".mp3")
+            audio.write_bytes(b"fake-audio")
+            return audio
+        monkeypatch.setattr(pipeline, "extract_audio", fake_extract)
+        async def fail_upload(title, md):
+            raise AssertionError("未配置时不应调用上传")
+        monkeypatch.setattr(pipeline, "upload_note", fail_upload)
+        monkeypatch.setattr(pipeline.config, "NOTION_TOKEN", "", raising=False)
+        monkeypatch.setattr(pipeline.config, "NOTION_PARENT_PAGE_ID", "", raising=False)
+        note_path = await pipeline.process_link(
+            "看看 https://v.douyin.com/test1/",
+            notes_dir=tmp_path / "notes",
+            work_dir=tmp_path / "work",
+            skip_git=True,
+        )
+        assert note_path.exists()
+
 
 class TestServer:
     @respx.mock

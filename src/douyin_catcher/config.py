@@ -29,6 +29,11 @@ class Config:
     NOTION_TOKEN: str = os.getenv("NOTION_TOKEN", "")  # integration secret（ntn_ 开头）
     NOTION_PARENT_PAGE_ID: str = os.getenv("NOTION_PARENT_PAGE_ID", "")
 
+    INBOX_API_BASE_URL: str = os.getenv("INBOX_API_BASE_URL", "http://127.0.0.1:8000")
+    INBOX_API_TOKEN: str = os.getenv("INBOX_API_TOKEN", "")
+    INBOX_CONV_ID: str = os.getenv("INBOX_CONV_ID", "")
+    INBOX_POOL_FILE: str = os.getenv("INBOX_POOL_FILE", "data/inbox_pool.json")
+
     HTTP_TIMEOUT: float = float(os.getenv("HTTP_TIMEOUT", "30"))
     DOWNLOAD_TIMEOUT: float = float(os.getenv("DOWNLOAD_TIMEOUT", "120"))
     BROWSER_TIMEOUT: float = float(os.getenv("BROWSER_TIMEOUT", "30"))

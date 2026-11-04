@@ -28,6 +28,7 @@ class Config:
 
     HTTP_TIMEOUT: float = float(os.getenv("HTTP_TIMEOUT", "30"))
     DOWNLOAD_TIMEOUT: float = float(os.getenv("DOWNLOAD_TIMEOUT", "120"))
+    BROWSER_TIMEOUT: float = float(os.getenv("BROWSER_TIMEOUT", "30"))
     USER_AGENT: str = os.getenv(
         "USER_AGENT",
         # 关键：抖音仅对 Android UA 的分享页做 SSR（内嵌 videoInfoRes）

@@ -7,11 +7,13 @@ import httpx
 import pytest
 import respx
 
+from douyin_catcher import parser
 from douyin_catcher.parser import (
     extract_urls,
     extract_video_id,
     fetch_video_info,
     parse_share_text,
+    _info_from_detail,
 )
 
 
@@ -48,68 +50,93 @@ class TestExtractVideoId:
         assert extract_video_id("https://www.douyin.com/user/abc") is None
 
 
-ROUTER_DATA = {
-    "loaderData": {
-        "video_(id)/page": {
-            "videoInfoRes": {
-                "item_list": [
-                    {
-                        "aweme_id": "7412345678901234567",
-                        "desc": "测试视频标题",
-                        "author": {"nickname": "测试作者"},
-                        "video": {
-                            "play_addr": {
-                                "uri": "v0d00fg10000abcdef",
-                                "url_list": [
-                                    "https://www.douyin.com/aweme/v1/play/?video_id=v0d00fg10000abcdef&ratio=1080p&line=0"
-                                ],
-                            }
-                        },
-                    }
-                ]
+DETAIL_DATA = {
+    "status_code": 0,
+    "aweme_detail": {
+        "aweme_id": "7412345678901234567",
+        "desc": "测试视频标题",
+        "author": {"nickname": "测试作者"},
+        "video": {
+            "play_addr": {
+                "uri": "v0d00fg10000abcdef",
+                "url_list": [
+                    "https://www.douyin.com/aweme/v1/play/?video_id=v0d00fg10000abcdef&ratio=1080p&line=0"
+                ],
             }
-        }
-    }
+        },
+    },
 }
 
 
-class TestFetchVideoInfo:
-    @respx.mock
-    async def test_parse_router_data(self, tmp_path: pathlib.Path):
-        html = "<html><script>window._ROUTER_DATA = " + json.dumps(ROUTER_DATA) + ";</script></html>"
-        respx.get("https://www.iesdouyin.com/share/video/7412345678901234567").mock(
-            return_value=httpx.Response(200, text=html)
-        )
-        info = await fetch_video_info("7412345678901234567")
+class TestInfoFromDetail:
+    def test_extracts_fields(self):
+        info = _info_from_detail(DETAIL_DATA)
         assert info["aweme_id"] == "7412345678901234567"
         assert info["title"] == "测试视频标题"
         assert info["author"] == "测试作者"
-        # playwm -> play 得到无水印地址
         assert info["video_url"].startswith("https://")
 
-    @respx.mock
-    async def test_raises_when_no_item(self):
-        empty = {"loaderData": {"video_(id)/page": {"videoInfoRes": {"item_list": []}}}}
-        html = "<script>window._ROUTER_DATA = " + json.dumps(empty) + ";</script>"
-        respx.get("https://www.iesdouyin.com/share/video/1").mock(
-            return_value=httpx.Response(200, text=html)
-        )
+    def test_replaces_playwm(self):
+        data = {
+            "aweme_detail": {
+                "aweme_id": "1",
+                "desc": "x",
+                "author": {"nickname": "a"},
+                "video": {
+                    "play_addr": {"url_list": ["https://cdn.example.com/playwm/?x=1"]}
+                },
+            }
+        }
+        assert "playwm" not in _info_from_detail(data)["video_url"]
+
+    def test_raises_when_detail_missing(self):
+        with pytest.raises(ValueError):
+            _info_from_detail({"status_code": 0})
+
+    def test_raises_when_no_video_url(self):
+        data = {
+            "aweme_detail": {
+                "aweme_id": "1",
+                "desc": "x",
+                "author": {"nickname": "a"},
+                "video": {"play_addr": {"url_list": []}},
+            }
+        }
+        info = _info_from_detail(data)
+        assert info["video_url"] == ""
+
+
+class TestFetchVideoInfo:
+    async def test_delegates_to_browser(self, monkeypatch):
+        async def fake_browser(aweme_id, timeout_s=30.0):
+            return DETAIL_DATA
+
+        monkeypatch.setattr(parser, "fetch_detail_via_browser", fake_browser)
+        info = await fetch_video_info("7412345678901234567")
+        assert info["title"] == "测试视频标题"
+
+    async def test_raises_on_empty_detail(self, monkeypatch):
+        async def fake_browser(aweme_id, timeout_s=30.0):
+            return {"status_code": 0}
+
+        monkeypatch.setattr(parser, "fetch_detail_via_browser", fake_browser)
         with pytest.raises(ValueError):
             await fetch_video_info("1")
 
 
 class TestParseShareText:
     @respx.mock
-    async def test_end_to_end_share_text(self):
+    async def test_end_to_end_share_text(self, monkeypatch):
         respx.get("https://v.douyin.com/iAbCdEf/").mock(
             return_value=httpx.Response(
                 302, headers={"Location": "https://www.douyin.com/video/7412345678901234567"}
             )
         )
-        html = "<script>window._ROUTER_DATA = " + json.dumps(ROUTER_DATA) + ";</script>"
-        respx.get("https://www.iesdouyin.com/share/video/7412345678901234567").mock(
-            return_value=httpx.Response(200, text=html)
-        )
+
+        async def fake_browser(aweme_id, timeout_s=30.0):
+            return DETAIL_DATA
+
+        monkeypatch.setattr(parser, "fetch_detail_via_browser", fake_browser)
         info = await parse_share_text("看看 https://v.douyin.com/iAbCdEf/")
         assert info["aweme_id"] == "7412345678901234567"
         assert info["title"] == "测试视频标题"

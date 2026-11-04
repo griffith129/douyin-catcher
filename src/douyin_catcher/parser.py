@@ -1,20 +1,18 @@
 """分享口令/链接 → 视频元数据。
 
 流程：正则提取 URL → 短链跟随重定向 → 提取 aweme_id →
-请求 iesdouyin 分享页，解析 window._ROUTER_DATA 拿标题/作者/无水印地址。
+无头浏览器加载视频页并拦截页面自身的签名 detail 响应 → 提取标题/作者/无水印地址。
+（2025-11 起分享页 SSR 已不内嵌 videoInfoRes，浏览器渲染是当前可行路线。）
 """
 
-import json
 import re
 
-import httpx
-
+from .browser import fetch_detail_via_browser
 from .config import config
 
 URL_RE = re.compile(r"https?://[^\s，,。；;）)】\]]+")
 VIDEO_ID_RE = re.compile(r"/(?:video|note|slides)/(\d{15,21})")
 MODAL_ID_RE = re.compile(r"modal_id=(\d{15,21})")
-ROUTER_DATA_RE = re.compile(r"window\._ROUTER_DATA\s*=\s*(\{.*?\})\s*;?\s*</script>", re.S)
 
 
 def extract_urls(share_text: str) -> list[str]:
@@ -31,63 +29,37 @@ def extract_video_id(url: str) -> str | None:
     return None
 
 
-def _parse_router_data(html: str) -> dict:
-    m = ROUTER_DATA_RE.search(html)
-    if not m:
-        raise ValueError("分享页中未找到 _ROUTER_DATA，接口可能已变化")
-    return json.loads(m.group(1))
-
-
-def _info_from_router_data(data: dict) -> dict:
-    loader = data.get("loaderData", {})
-    res = None
-    for key in ("video_(id)/page", "note_(id)/page"):
-        page = loader.get(key)
-        if isinstance(page, dict) and page.get("videoInfoRes"):
-            res = page["videoInfoRes"]
-            break
-    if res is None:
-        # 兜底：遍历任意带 videoInfoRes 的页面
-        for page in loader.values():
-            if isinstance(page, dict) and page.get("videoInfoRes"):
-                res = page["videoInfoRes"]
-                break
-    if res is None:
-        raise ValueError("分享页未含视频数据（视频不存在或接口变化）")
-    items = res.get("item_list") or []
-    if not items:
-        raise ValueError("视频不存在或已被删除")
-    item = items[0]
-    play_addr = item.get("video", {}).get("play_addr", {})
+def _info_from_detail(data: dict) -> dict:
+    """从 detail 接口响应中提取统一形状的元数据。"""
+    detail = data.get("aweme_detail") or {}
+    if not detail:
+        raise ValueError("视频不存在或已被删除（detail 返回空）")
+    play_addr = (detail.get("video") or {}).get("play_addr") or {}
     url_list = play_addr.get("url_list") or []
     video_url = url_list[0].replace("playwm", "play") if url_list else ""
     return {
-        "aweme_id": item.get("aweme_id", ""),
-        "title": (item.get("desc") or "").strip(),
-        "author": (item.get("author") or {}).get("nickname", ""),
+        "aweme_id": detail.get("aweme_id", ""),
+        "title": (detail.get("desc") or "").strip(),
+        "author": (detail.get("author") or {}).get("nickname", ""),
         "video_url": video_url,
     }
 
 
 async def fetch_video_info(aweme_id: str) -> dict:
-    """根据 aweme_id 拉取视频元数据。"""
-    url = f"https://www.iesdouyin.com/share/video/{aweme_id}"
-    async with httpx.AsyncClient(
-        timeout=config.HTTP_TIMEOUT,
-        follow_redirects=True,
-        headers={"User-Agent": config.USER_AGENT},
-    ) as client:
-        resp = await client.get(url)
-        resp.raise_for_status()
-    return _info_from_router_data(_parse_router_data(resp.text))
+    """根据 aweme_id 拉取视频元数据（浏览器渲染路线）。"""
+    data = await fetch_detail_via_browser(aweme_id, timeout_s=config.BROWSER_TIMEOUT)
+    return _info_from_detail(data)
 
 
 async def resolve_short_url(url: str) -> str:
     """跟随短链重定向，返回最终 URL。"""
+    import httpx
+
     async with httpx.AsyncClient(
         timeout=config.HTTP_TIMEOUT,
         follow_redirects=False,
         headers={"User-Agent": config.USER_AGENT},
+        trust_env=False,
     ) as client:
         resp = await client.get(url)
     if resp.is_redirect or resp.is_server_error and "Location" in resp.headers:

@@ -7,23 +7,16 @@ import respx
 from fastapi.testclient import TestClient
 
 from douyin_catcher import pipeline
+from douyin_catcher.parser import _info_from_detail
 from douyin_catcher.server import app
 
-ROUTER_DATA = {
-    "loaderData": {
-        "video_(id)/page": {
-            "videoInfoRes": {
-                "item_list": [
-                    {
-                        "aweme_id": "1112223334445556667",
-                        "desc": "管线测试视频",
-                        "author": {"nickname": "作者A"},
-                        "video": {"play_addr": {"uri": "v0d00x", "url_list": [
-                            "https://www.douyin.com/aweme/v1/play/?video_id=v0d00x&playwm"]}},
-                    }
-                ]
-            }
-        }
+DETAIL_DATA = {
+    "aweme_detail": {
+        "aweme_id": "1112223334445556667",
+        "desc": "管线测试视频",
+        "author": {"nickname": "作者A"},
+        "video": {"play_addr": {"uri": "v0d00x", "url_list": [
+            "https://www.douyin.com/aweme/v1/play/?video_id=v0d00x&playwm"]}},
     }
 }
 
@@ -31,9 +24,6 @@ ROUTER_DATA = {
 def _mock_upstream():
     respx.get("https://v.douyin.com/test1/").mock(
         return_value=httpx.Response(302, headers={"Location": "https://www.douyin.com/video/1112223334445556667"})
-    )
-    respx.get("https://www.iesdouyin.com/share/video/1112223334445556667").mock(
-        return_value=httpx.Response(200, text="<script>window._ROUTER_DATA = " + json.dumps(ROUTER_DATA) + ";</script>")
     )
     respx.get(url__startswith="https://www.douyin.com/aweme/v1/play/").mock(
         return_value=httpx.Response(200, content=b"fakevideo")
@@ -50,6 +40,9 @@ class TestPipeline:
     @respx.mock
     async def test_process_link_full_flow(self, tmp_path, monkeypatch):
         _mock_upstream()
+        async def fake_parse(text):
+            return _info_from_detail(DETAIL_DATA)
+        monkeypatch.setattr(pipeline, "parse_share_text", fake_parse)
         monkeypatch.setattr(pipeline.config, "SILICONFLOW_API_KEY", "sk-test")
         # 单元隔离：跳过真实 ffmpeg，生成占位音频文件
         def fake_extract(video, audio=None):

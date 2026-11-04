@@ -69,6 +69,37 @@ class TestSummarize:
         )
         assert "一句话结论" in out
 
+    @respx.mock
+    async def test_responses_api_style(self, monkeypatch):
+        """LLM_API_STYLE=responses 时走 /responses 端点（Codex 风格）。"""
+        from douyin_catcher.config import config as cfg
+        from douyin_catcher import summarizer
+
+        monkeypatch.setattr(cfg, "LLM_BASE_URL", "http://127.0.0.1:7864/v1")
+        monkeypatch.setattr(cfg, "LLM_API_STYLE", "responses", raising=False)
+        monkeypatch.setattr(cfg, "LLM_MODEL", "cn:deepseek-v4-flash")
+        route = respx.post("http://127.0.0.1:7864/v1/responses").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "status": "completed",
+                    "output": [
+                        {
+                            "type": "message",
+                            "content": [
+                                {"type": "output_text", "text": "## 一句话结论\nresponses 风格"}
+                            ],
+                        }
+                    ],
+                },
+            )
+        )
+        out = await summarize(
+            title="T", author="A", transcript="文案", api_key="sk-test"
+        )
+        assert "一句话结论" in out
+        assert route.called
+
     def test_prompt_mentions_required_sections(self):
         for section in ("一句话结论", "核心要点", "关键细节", "原文没有讲清的问题"):
             assert section in SUMMARY_PROMPT

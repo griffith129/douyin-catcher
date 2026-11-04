@@ -9,5 +9,7 @@ from douyin_catcher import config as cfg
 def _test_config(monkeypatch):
     monkeypatch.setattr(cfg.config, "ASR_PROVIDER", "siliconflow")
     monkeypatch.setattr(cfg.config, "LLM_BASE_URL", "https://api.siliconflow.cn/v1")
+    monkeypatch.setattr(cfg.config, "LLM_API_STYLE", "chat", raising=False)
+    monkeypatch.setattr(cfg.config, "LLM_MODEL", "deepseek-ai/DeepSeek-V3")
     monkeypatch.setattr(cfg.config, "LLM_API_KEY", "")
     monkeypatch.setattr(cfg.config, "SILICONFLOW_API_KEY", "")

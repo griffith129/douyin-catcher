@@ -23,31 +23,55 @@ SUMMARY_PROMPT = """你是知识整理助手。下面是一条抖音知识类视
 {transcript}"""
 
 
+def _extract_responses_text(data: dict) -> str:
+    """从 Responses API 返回中提取文本（兼容 output[].content[].output_text）。"""
+    text = data.get("output_text")
+    if text:
+        return str(text).strip()
+    parts: list[str] = []
+    for item in data.get("output") or []:
+        if item.get("type") != "message":
+            continue
+        for block in item.get("content") or []:
+            if block.get("type") == "output_text" and block.get("text"):
+                parts.append(block["text"])
+    return "\n".join(parts).strip()
+
+
 async def summarize(
     title: str, author: str, transcript: str, api_key: str | None = None
 ) -> str:
     api_key = api_key or config.LLM_API_KEY or config.SILICONFLOW_API_KEY
     if not api_key:
         raise RuntimeError("缺少 LLM_API_KEY / SILICONFLOW_API_KEY")
-    url = f"{config.LLM_BASE_URL}/chat/completions"
-    payload = {
-        "model": config.LLM_MODEL,
-        "messages": [
-            {
-                "role": "user",
-                "content": SUMMARY_PROMPT.format(
-                    title=title, author=author, transcript=transcript
-                ),
-            }
-        ],
-        "temperature": 0.3,
-        "max_tokens": 2048,
-    }
+    prompt = SUMMARY_PROMPT.format(title=title, author=author, transcript=transcript)
+    headers = {"Authorization": f"Bearer {api_key}"}
     async with httpx.AsyncClient(timeout=180) as client:
-        resp = await client.post(
-            url,
-            headers={"Authorization": f"Bearer {api_key}"},
-            json=payload,
-        )
-    resp.raise_for_status()
-    return resp.json()["choices"][0]["message"]["content"].strip()
+        if config.LLM_API_STYLE == "responses":
+            # Codex 风格反代仅支持 /v1/responses
+            resp = await client.post(
+                f"{config.LLM_BASE_URL}/responses",
+                headers=headers,
+                json={
+                    "model": config.LLM_MODEL,
+                    "input": prompt,
+                    "temperature": 0.3,
+                    "max_output_tokens": 2048,
+                },
+            )
+            resp.raise_for_status()
+            text = _extract_responses_text(resp.json())
+        else:
+            resp = await client.post(
+                f"{config.LLM_BASE_URL}/chat/completions",
+                headers=headers,
+                json={
+                    "model": config.LLM_MODEL,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.3,
+                    "max_tokens": 2048,
+                },
+            )
+            resp.raise_for_status()
+            text = resp.json()["choices"][0]["message"]["content"].strip()
+    return text

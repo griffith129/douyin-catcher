@@ -16,12 +16,15 @@ class TestDownloadVideo:
     @respx.mock
     async def test_streams_to_file(self, tmp_path):
         payload = b"fake-video-bytes-0123456789"
-        respx.get("https://cdn.example.com/video.mp4").mock(
+        route = respx.get("https://cdn.example.com/video.mp4").mock(
             return_value=httpx.Response(200, content=payload)
         )
         dest = tmp_path / "v.mp4"
         await download_video("https://cdn.example.com/video.mp4", dest)
         assert dest.read_bytes() == payload
+        # 抖音 CDN 要求 Referer，缺失会被 403
+        req = route.calls.last.request
+        assert req.headers.get("Referer") == "https://www.douyin.com/"
 
     @respx.mock
     async def test_raises_on_http_error(self, tmp_path):

@@ -13,7 +13,8 @@ async def download_video(url: str, dest: str | Path) -> Path:
     async with httpx.AsyncClient(
         timeout=config.DOWNLOAD_TIMEOUT,
         follow_redirects=True,
-        headers={"User-Agent": config.USER_AGENT},
+        trust_env=False,  # 国内 CDN 直连，绕过环境代理
+        headers={"User-Agent": config.USER_AGENT, "Referer": "https://www.douyin.com/"},
     ) as client:
         async with client.stream("GET", url) as resp:
             resp.raise_for_status()

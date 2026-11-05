@@ -37,7 +37,13 @@ def _transcribe_whisper(audio_path: Path) -> str:
     )
     try:
         model = WhisperModel(config.WHISPER_MODEL, device="cpu", compute_type="int8")
-        segments, _ = model.transcribe(str(wav_path), language="zh", vad_filter=True)
+        # initial_prompt 防止 zh 漂移输出繁体（2026-11-05 真实故障）
+        segments, _ = model.transcribe(
+            str(wav_path),
+            language="zh",
+            vad_filter=True,
+            initial_prompt="以下是普通话的句子。",
+        )
         return "".join(seg.text for seg in segments).strip()
     finally:
         wav_path.unlink(missing_ok=True)

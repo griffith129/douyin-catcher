@@ -5,9 +5,9 @@ import json
 import httpx
 import respx
 
-from douyin_catcher.asr import transcribe
+from douyin_catcher.asr import _transcribe_whisper, transcribe
 from douyin_catcher.downloader import download_video
-from douyin_catcher.summarizer import SUMMARY_PROMPT, summarize
+from douyin_catcher.summarizer import SUMMARY_PROMPT, correct_transcript, summarize
 
 import pytest
 
@@ -102,6 +102,82 @@ class TestTranscribe:
         )
         with pytest.raises(httpx.HTTPStatusError):
             await transcribe(audio, api_key="sk-bad")
+
+
+class TestWhisperTranscribe:
+    async def test_whisper_passes_simplified_initial_prompt(self, tmp_path, monkeypatch):
+        """faster-whisper 必须携带简体中文 initial_prompt。
+
+        2026-11-05 真实故障：base 模型 language=zh 漂移输出繁体
+        （大模型→大摩行、形式化→行事化、Rust→Ruex）。
+        """
+        import subprocess
+        import sys
+        import types
+
+        captured = {}
+
+        class FakeSeg:
+            text = "你好世界"
+
+        class FakeModel:
+            def __init__(self, model, device=None, compute_type=None):
+                captured["model"] = model
+
+            def transcribe(self, path, language=None, vad_filter=None, initial_prompt=None):
+                captured["lang"] = language
+                captured["prompt"] = initial_prompt
+                return iter([FakeSeg()]), None
+
+        fake_mod = types.ModuleType("faster_whisper")
+        fake_mod.WhisperModel = FakeModel
+        monkeypatch.setitem(sys.modules, "faster_whisper", fake_mod)
+        monkeypatch.setattr(subprocess, "run", lambda *a, **k: None)
+
+        out = _transcribe_whisper(tmp_path / "a.mp3")
+
+        assert out == "你好世界"
+        assert captured["lang"] == "zh"
+        assert captured["prompt"] == "以下是普通话的句子。"
+
+
+class TestCorrectTranscript:
+    """ASR 文本 LLM 二次校对（纠正同音字/专有名词/繁简漂移）。"""
+
+    @respx.mock
+    async def test_fixes_asr_errors_via_llm(self, monkeypatch):
+        from douyin_catcher.config import config as cfg
+
+        monkeypatch.setattr(cfg, "LLM_BASE_URL", "http://127.0.0.1:7864/v1")
+        monkeypatch.setattr(cfg, "LLM_API_STYLE", "responses", raising=False)
+        monkeypatch.setattr(cfg, "LLM_MODEL", "cn:deepseek-v4-flash")
+        route = respx.post("http://127.0.0.1:7864/v1/responses").mock(
+            return_value=httpx.Response(
+                200,
+                json={"output_text": "我从一开始就反对让大模型之间搞对抗性代码审查。"},
+            )
+        )
+        out = await correct_transcript(
+            "我從一開始就反對讓大摩行之間搞對抗性代碼審查",
+            title="别让大模型围着代码吵架了：TDD 与形式化验证",
+            author="老周 AgentBuilder",
+            api_key="sk-test",
+        )
+        assert out == "我从一开始就反对让大模型之间搞对抗性代码审查。"
+        assert route.called
+
+    @respx.mock
+    async def test_falls_back_to_original_on_llm_error(self, monkeypatch):
+        from douyin_catcher.config import config as cfg
+
+        monkeypatch.setattr(cfg, "LLM_BASE_URL", "http://127.0.0.1:7864/v1")
+        monkeypatch.setattr(cfg, "LLM_API_STYLE", "responses", raising=False)
+        raw = "原始转写文本保持原样"
+        respx.post("http://127.0.0.1:7864/v1/responses").mock(
+            return_value=httpx.Response(500)
+        )
+        out = await correct_transcript(raw, title="T", api_key="sk-test")
+        assert out == raw  # 校对失败不阻塞主流程，回退原文
 
 
 class TestSummarize:

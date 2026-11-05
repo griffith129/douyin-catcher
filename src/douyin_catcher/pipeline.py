@@ -13,7 +13,7 @@ from .downloader import download_video
 from .note import build_markdown, save_note
 from .notion import upload_note
 from .parser import parse_share_text
-from .summarizer import summarize
+from .summarizer import correct_transcript, summarize
 
 
 async def _maybe_upload_to_notion(meta: dict, summary: str, transcript: str) -> str | None:
@@ -69,6 +69,10 @@ async def process_link(
     transcript = await transcribe(audio_path)
     if not transcript:
         raise ValueError("ASR 结果为空")
+    # LLM 二次校对：纠正同音字/专有名词/繁简漂移（失败自动回退原文）
+    transcript = await correct_transcript(
+        transcript, title=meta["title"], author=meta["author"]
+    )
 
     summary = await summarize(title=meta["title"], author=meta["author"], transcript=transcript)
     note_path = save_note(meta, summary=summary, transcript=transcript, notes_dir=notes_dir)

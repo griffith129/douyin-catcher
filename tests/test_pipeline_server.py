@@ -31,8 +31,12 @@ def _mock_upstream():
     respx.post("https://api.siliconflow.cn/v1/audio/transcriptions").mock(
         return_value=httpx.Response(200, json={"text": "这是文字稿。"})
     )
+    # LLM 调用顺序：1) correct_transcript 纠错  2) summarize 摘要
     respx.post("https://api.siliconflow.cn/v1/chat/completions").mock(
-        return_value=httpx.Response(200, json={"choices": [{"message": {"content": "## 一句话结论\nOK"}}]})
+        side_effect=[
+            httpx.Response(200, json={"choices": [{"message": {"content": "这是校对后的文字稿。"}}]}),
+            httpx.Response(200, json={"choices": [{"message": {"content": "## 一句话结论\nOK"}}]}),
+        ]
     )
 
 
@@ -60,7 +64,8 @@ class TestPipeline:
         assert note_path.exists()
         text = note_path.read_text(encoding="utf-8")
         assert "一句话结论" in text
-        assert "这是文字稿。" in text
+        # 笔记中的文字稿必须是纠错后的版本（LLM 二次校对已接入管线）
+        assert "这是校对后的文字稿。" in text
         assert "aweme_id: '1112223334445556667'" in text
 
     async def test_process_link_rejects_bad_text(self, tmp_path):

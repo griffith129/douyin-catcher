@@ -119,6 +119,7 @@ _INBOX_PAGE = """<!DOCTYPE html>
   .item { display: flex; gap: 10px; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; margin: 8px 0; align-items: center; }
   .item input { width: 18px; height: 18px; }
   .url { word-break: break-all; flex: 1; font-size: 14px; }
+  .title { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
   .status { font-size: 12px; padding: 2px 8px; border-radius: 10px; background: #eee; }
   .status.pending { background: #fff3cd; }
   .status.queued { background: #d4edda; }
@@ -145,14 +146,21 @@ async function refresh() {
 }
 function render() {
   const el = document.getElementById('list');
-  const entries = Object.entries(links).sort((a, b) => (a[1].seq || 0) - (b[1].seq || 0));
-  el.innerHTML = entries.length ? entries.map(([url, it]) => `
+  const entries = Object.entries(links).sort((a, b) => (b[1].seq || 0) - (a[1].seq || 0));
+  const shown = entries.slice(0, 100);
+  el.innerHTML = shown.length ? shown.map(([url, it]) => `
     <div class="item">
       <input type="checkbox" class="pick" data-url="${url}" ${it.status === 'pending' ? '' : 'disabled'}>
-      <div class="url"><a href="${url}" target="_blank">${url}</a>
-        <div class="muted">消息 seq ${it.seq ?? '-'} · 收录于 ${it.added_at || '-'}</div></div>
+      <div class="url">
+        <div class="title">${(it.title || '（标题待处理时补全）').replace(/</g, '&lt;')}</div>
+        <div class="muted"><a href="${url}" target="_blank">${url}</a> · 消息 seq ${it.seq ?? '-'} · 收录于 ${it.added_at || '-'}</div>
+      </div>
       <span class="status ${it.status}">${it.status}</span>
-    </div>`).join('') : '<p class="muted">池子是空的——先点「从对话同步」，或直接 POST /link 投递。</p>';
+    </div>`).join('')
+    : '<p class="muted">池子是空的——先点「从对话同步」，或直接 POST /link 投递。</p>';
+  if (entries.length > shown.length) {
+    el.insertAdjacentHTML('beforeend', `<p class="muted">仅显示最近 100 条（共 ${entries.length} 条已入池，历史仍在池中可用）。</p>`);
+  }
 }
 function toggleAll() {
   const boxes = [...document.querySelectorAll('.pick:not(:disabled)')];

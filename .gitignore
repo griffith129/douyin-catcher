@@ -13,3 +13,4 @@ wheels/
 .env
 data/
 .pytest_tmp/
+server.log

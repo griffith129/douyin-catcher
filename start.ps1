@@ -73,6 +73,26 @@ if (Test-Port 7864) {
     Write-Host "       Video processing will fail at the summary step until it is up." -ForegroundColor Yellow
 }
 
+# --- 4.5) douyin login state check (real browser probe, may take ~15s) ---
+if ($ok8000) {
+    Write-Host "[...] checking douyin login state (opens headless browser, ~15s) ..."
+    try {
+        $resp = Invoke-RestMethod -Uri "http://127.0.0.1:8000/panel/api/login/check" -TimeoutSec 60
+        if ($resp.status -eq "logged_in") {
+            Write-Host "[OK] douyin login state: valid (cookie persists, no re-login needed)" -ForegroundColor Green
+        } elseif ($resp.status -eq "expired" -or $resp.status -eq "no_profile") {
+            Write-Host "[WARN] douyin login state: $($resp.status)" -ForegroundColor Yellow
+            Write-Host "       Fix: open http://127.0.0.1:8000/panel -> login section ->" -ForegroundColor Yellow
+            Write-Host "       import fresh cookies (cookie-editor JSON) or scan the QR code once." -ForegroundColor Yellow
+        } else {
+            Write-Host "[WARN] douyin login check returned: $($resp.status) $($resp.message)" -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Host "[WARN] could not check login state ($($_.Exception.Message))" -ForegroundColor Yellow
+        Write-Host "       If the panel has a password set, check manually at http://127.0.0.1:8000/panel" -ForegroundColor Yellow
+    }
+}
+
 # --- 5) open both stations: collector panel + selection UI ---
 if ($ok8000) {
     Write-Host "[+] opening collector panel http://127.0.0.1:8000/panel ..."

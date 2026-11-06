@@ -51,6 +51,28 @@ def _extract_responses_text(data: dict) -> str:
     return "\n".join(parts).strip()
 
 
+def _load_note_spec() -> str:
+    """读取文档规范提示词文件；缺失/未配置时返回空串（不阻塞）。"""
+    from pathlib import Path
+
+    path = config.NOTE_SPEC_FILE
+    if not path:
+        return ""
+    try:
+        return Path(path).read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
+def _build_prompt(title: str, author: str, transcript: str) -> str:
+    """基础结构指令 + 文档规范（存在时前置）。"""
+    base = SUMMARY_PROMPT.format(title=title, author=author, transcript=transcript)
+    spec = _load_note_spec()
+    if spec:
+        return f"{spec}\n\n---\n\n{base}"
+    return base
+
+
 async def _llm_text(prompt: str, api_key: str) -> str:
     """统一的 LLM 文本调用（兼容 chat/completions 与 responses 两种 API 风格）。"""
     headers = {"Authorization": f"Bearer {api_key}"}
@@ -64,7 +86,7 @@ async def _llm_text(prompt: str, api_key: str) -> str:
                     "model": config.LLM_MODEL,
                     "input": prompt,
                     "temperature": 0.3,
-                    "max_output_tokens": 2048,
+                    "max_output_tokens": 4096,
                 },
             )
             resp.raise_for_status()
@@ -76,7 +98,7 @@ async def _llm_text(prompt: str, api_key: str) -> str:
                 "model": config.LLM_MODEL,
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.3,
-                "max_tokens": 2048,
+                "max_tokens": 4096,
             },
         )
         resp.raise_for_status()
@@ -107,5 +129,5 @@ async def summarize(
     api_key = api_key or config.LLM_API_KEY or config.SILICONFLOW_API_KEY
     if not api_key:
         raise RuntimeError("缺少 LLM_API_KEY / SILICONFLOW_API_KEY")
-    prompt = SUMMARY_PROMPT.format(title=title, author=author, transcript=transcript)
+    prompt = _build_prompt(title=title, author=author, transcript=transcript)
     return await _llm_text(prompt, api_key)

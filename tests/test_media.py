@@ -228,3 +228,49 @@ class TestSummarize:
     def test_prompt_mentions_required_sections(self):
         for section in ("一句话结论", "核心要点", "关键细节", "原文没有讲清的问题"):
             assert section in SUMMARY_PROMPT
+
+
+class TestNoteSpec:
+    """2B 路线：文档规范文件（docs/note_spec.md）拼入 LLM 提示词。"""
+
+    async def _capture_request(self, monkeypatch, tmp_path):
+        from douyin_catcher.config import config as cfg
+
+        monkeypatch.setattr(cfg, "LLM_BASE_URL", "http://127.0.0.1:7864/v1")
+        monkeypatch.setattr(cfg, "LLM_API_STYLE", "responses", raising=False)
+        monkeypatch.setattr(cfg, "LLM_MODEL", "cn:deepseek-v4-flash")
+        route = respx.post("http://127.0.0.1:7864/v1/responses").mock(
+            return_value=httpx.Response(200, json={"output_text": "ok"})
+        )
+        await summarize(title="T", author="A", transcript="文", api_key="sk-test")
+        import json as _json
+
+        return _json.loads(route.calls.last.request.content)
+
+    @respx.mock
+    async def test_spec_file_injected_into_prompt(self, monkeypatch, tmp_path):
+        from douyin_catcher.config import config as cfg
+
+        spec_file = tmp_path / "note_spec.md"
+        spec_file.write_text("SPEC_MARKER_文档规范内容", encoding="utf-8")
+        monkeypatch.setattr(cfg, "NOTE_SPEC_FILE", str(spec_file), raising=False)
+        body = await self._capture_request(monkeypatch, tmp_path)
+        assert "SPEC_MARKER_文档规范内容" in body["input"]
+        assert "一句话结论" in body["input"]  # 原有结构指令仍在
+
+    @respx.mock
+    async def test_missing_spec_file_falls_back_gracefully(self, monkeypatch, tmp_path):
+        from douyin_catcher.config import config as cfg
+
+        monkeypatch.setattr(cfg, "NOTE_SPEC_FILE", str(tmp_path / "nope.md"), raising=False)
+        body = await self._capture_request(monkeypatch, tmp_path)
+        assert "一句话结论" in body["input"]  # 规范缺失不报错，仍可整理
+
+    @respx.mock
+    async def test_max_output_tokens_raised_for_spec(self, monkeypatch, tmp_path):
+        """新规范输出更长（精华版+逻辑链+ELI5），token 上限需 4096。"""
+        from douyin_catcher.config import config as cfg
+
+        monkeypatch.setattr(cfg, "NOTE_SPEC_FILE", "", raising=False)
+        body = await self._capture_request(monkeypatch, tmp_path)
+        assert body["max_output_tokens"] == 4096

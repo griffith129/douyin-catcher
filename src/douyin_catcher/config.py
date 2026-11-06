@@ -20,6 +20,7 @@ class Config:
     LLM_BASE_URL: str = os.getenv("LLM_BASE_URL", "https://api.siliconflow.cn/v1")
     LLM_MODEL: str = os.getenv("LLM_MODEL", "deepseek-ai/DeepSeek-V3")
     LLM_API_STYLE: str = os.getenv("LLM_API_STYLE", "chat")  # chat | responses
+    NOTE_SPEC_FILE: str = os.getenv("NOTE_SPEC_FILE", "docs/note_spec.md")  # 文档规范提示词，空 = 不用
 
     NOTES_DIR: str = os.getenv("NOTES_DIR", "notes")
     QUEUE_FILE: str = os.getenv("QUEUE_FILE", "data/queue.txt")

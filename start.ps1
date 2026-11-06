@@ -75,8 +75,8 @@ if (Test-Port 7864) {
 
 # --- 5) open both stations: collector panel + selection UI ---
 if ($ok8000) {
-    Write-Host "[+] opening collector panel http://127.0.0.1:8000 ..."
-    Start-Process "http://127.0.0.1:8000"
+    Write-Host "[+] opening collector panel http://127.0.0.1:8000/panel ..."
+    Start-Process "http://127.0.0.1:8000/panel"
 }
 if ($ok8787) {
     Write-Host "[+] opening selection station http://127.0.0.1:8787/inbox ..."

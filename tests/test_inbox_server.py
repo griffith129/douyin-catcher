@@ -54,6 +54,28 @@ class TestInboxApi:
         assert "text/html" in r.headers["content-type"]
         assert "选择台" in r.text
 
+    def test_inbox_page_has_search_and_accordion(self, tmp_path, monkeypatch):
+        """手风琴两级勾选 + 可展开搜索（默认关闭，展开后在对话内过滤）。"""
+        _seed_pool(tmp_path, monkeypatch, {})
+        r = client.get("/inbox")
+        html = r.text
+        assert "pick-conv" in html          # 对话框级整选勾选框
+        assert "toggleConv" in html         # 手风琴展开/收起
+        assert "searchToggle" in html       # 搜索开关按钮
+        assert "searchPanel" in html        # 可展开搜索面板
+        assert "searchInput" in html        # 标题过滤输入框
+        assert "仅待处理" in html           # 状态筛选 chip
+
+    def test_inbox_page_has_search_and_accordion(self, tmp_path, monkeypatch):
+        """选定方案：手风琴两级勾选 + 可展开搜索（方案1+7）。"""
+        _seed_pool(tmp_path, monkeypatch, {})
+        html = client.get("/inbox").text
+        assert "searchPanel" in html  # 可展开搜索面板
+        assert "toggleSearch" in html  # 搜索开关
+        assert "pick-conv" in html  # 会话级勾选
+        assert "toggleConv" in html  # 手风琴展开
+        assert "Search scope" not in html and "搜索范围" in html  # 搜索范围提示
+
 
 class TestInboxSelect:
     def test_select_enqueues_and_marks(self, tmp_path, monkeypatch):

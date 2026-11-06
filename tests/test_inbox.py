@@ -16,7 +16,9 @@ from douyin_catcher.inbox import (
 )
 
 
-def _share_msg(seq: int, item_id: str, title: str, ts: int = 1793839200) -> dict:
+def _share_msg(
+    seq: int, item_id: str, title: str, ts: int = 1793839200, conv_id: str = ""
+) -> dict:
     """按 douyin-chat-export 真实结构构造分享卡片消息。
 
     真实字段（2026-11 抓包）：标题在 content_title，作者名在 content_name，
@@ -27,6 +29,7 @@ def _share_msg(seq: int, item_id: str, title: str, ts: int = 1793839200) -> dict
         "content": "[分享]",
         "msg_type": "share",
         "awe_type": 800,
+        "conversation_id": conv_id,
         "content_json": json.dumps(
             {
                 "aweType": 800,
@@ -42,6 +45,7 @@ def _share_msg(seq: int, item_id: str, title: str, ts: int = 1793839200) -> dict
     }
     return {
         "msg_id": f"srv_{item_id}",
+        "conv_id": conv_id,
         "seq": seq,
         "msg_type": 4,
         "content": "[分享]",
@@ -253,6 +257,11 @@ class TestSyncInbox:
     @respx.mock
     async def test_full_sync_flow(self, tmp_path):
         pool_file = tmp_path / "inbox_pool.json"
+        respx.get("http://127.0.0.1:8000/api/conversations").mock(
+            return_value=httpx.Response(
+                200, json={"items": [{"conv_id": "c1", "name": "彻彻"}]}
+            )
+        )
         respx.get(
             url__startswith="http://127.0.0.1:8000/api/conversations/c1/messages"
         ).mock(
@@ -271,6 +280,11 @@ class TestSyncInbox:
     @respx.mock
     async def test_sync_incremental_skips_old(self, tmp_path):
         pool_file = tmp_path / "inbox_pool.json"
+        respx.get("http://127.0.0.1:8000/api/conversations").mock(
+            return_value=httpx.Response(
+                200, json={"items": [{"conv_id": "c1", "name": "彻彻"}]}
+            )
+        )
         route = respx.get(
             url__startswith="http://127.0.0.1:8000/api/conversations/c1/messages"
         ).mock(
@@ -281,3 +295,108 @@ class TestSyncInbox:
         await sync_inbox(pool_file, base_url="http://127.0.0.1:8000", conv_id="c1", token="tk")
         await sync_inbox(pool_file, base_url="http://127.0.0.1:8000", conv_id="c1", token="tk")
         assert "after_seq=105" in str(route.calls[-1].request.url)
+
+
+CONV_C1 = "0:1:c1:c1"
+CONV_C2 = "0:1:c2:c2"
+
+
+class TestMultiConversationSync:
+    """多对话框同步：按会话分组入池、每会话独立增量、显示会话名。"""
+
+    def _mock_two_convs(self):
+        respx.get("http://127.0.0.1:8000/api/conversations").mock(
+            return_value=httpx.Response(
+                200,
+                json={"items": [
+                    {"conv_id": CONV_C1, "name": "彻彻"},
+                    {"conv_id": CONV_C2, "name": "阿明"},
+                ]},
+            )
+        )
+        respx.get(
+            url__startswith=f"http://127.0.0.1:8000/api/conversations/{CONV_C1.replace(':', '%3A')}/messages"
+        ).mock(
+            return_value=httpx.Response(
+                200,
+                json={"items": [_share_msg(11, "7703128487007112511", "C1视频", conv_id=CONV_C1)],
+                      "has_newer": False},
+            )
+        )
+        respx.get(
+            url__startswith=f"http://127.0.0.1:8000/api/conversations/{CONV_C2.replace(':', '%3A')}/messages"
+        ).mock(
+            return_value=httpx.Response(
+                200,
+                json={"items": [_share_msg(21, "7698402336053972827", "C2视频", conv_id=CONV_C2)],
+                      "has_newer": False},
+            )
+        )
+
+    @respx.mock
+    async def test_sync_all_conversations_grouped(self, tmp_path):
+        pool_file = tmp_path / "inbox_pool.json"
+        self._mock_two_convs()
+        result = await sync_inbox(pool_file, base_url="http://127.0.0.1:8000", token="tk")
+        pool = load_pool(pool_file)
+        assert result["added"] == 2
+        assert set(pool["conversations"]) == {CONV_C1, CONV_C2}
+        assert pool["conversations"][CONV_C1]["name"] == "彻彻"
+        assert pool["conversations"][CONV_C1]["last_seq"] == 11
+        assert pool["conversations"][CONV_C2]["last_seq"] == 21
+        by_url = pool["links"]
+        assert by_url["https://www.douyin.com/video/7703128487007112511"]["conv_id"] == CONV_C1
+        assert by_url["https://www.douyin.com/video/7703128487007112511"]["conv_name"] == "彻彻"
+        assert by_url["https://www.douyin.com/video/7698402336053972827"]["conv_id"] == CONV_C2
+
+    @respx.mock
+    async def test_sync_selected_conv_ids_only(self, tmp_path):
+        pool_file = tmp_path / "inbox_pool.json"
+        self._mock_two_convs()
+        await sync_inbox(
+            pool_file, base_url="http://127.0.0.1:8000", token="tk", conv_ids=[CONV_C2]
+        )
+        pool = load_pool(pool_file)
+        assert list(pool["conversations"]) == [CONV_C2]
+        assert len(pool["links"]) == 1
+
+    @respx.mock
+    async def test_per_conv_incremental(self, tmp_path):
+        pool_file = tmp_path / "inbox_pool.json"
+        self._mock_two_convs()
+        await sync_inbox(pool_file, base_url="http://127.0.0.1:8000", token="tk")
+        await sync_inbox(pool_file, base_url="http://127.0.0.1:8000", token="tk")
+        c1_calls = [c for c in respx.calls if "c1" in str(c.request.url)]
+        c2_calls = [c for c in respx.calls if "c2" in str(c.request.url)]
+        assert any("after_seq=11" in str(c.request.url) for c in c1_calls[-1:])
+        assert any("after_seq=21" in str(c.request.url) for c in c2_calls[-1:])
+
+    @respx.mock
+    async def test_legacy_pool_migrated(self, tmp_path, monkeypatch):
+        """旧版单会话池（有 last_seq 无 conversations）自动迁移到配置会话。"""
+        from douyin_catcher.config import config
+
+        monkeypatch.setattr(config, "INBOX_CONV_ID", CONV_C1, raising=False)
+        pool_file = tmp_path / "inbox_pool.json"
+        legacy_url = "https://www.douyin.com/video/7703128487007112511"
+        pool_file.write_text(
+            json.dumps(
+                {"links": {legacy_url: {"status": "pending", "seq": 5}},
+                 "last_seq": 3429, "updated_at": ""},
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        respx.get("http://127.0.0.1:8000/api/conversations").mock(
+            return_value=httpx.Response(
+                200, json={"items": [{"conv_id": CONV_C1, "name": "彻彻"}]}
+            )
+        )
+        respx.get(
+            url__startswith=f"http://127.0.0.1:8000/api/conversations/{CONV_C1.replace(':', '%3A')}/messages"
+        ).mock(return_value=httpx.Response(200, json={"items": [], "has_newer": False}))
+        await sync_inbox(pool_file, base_url="http://127.0.0.1:8000", token="tk")
+        pool = load_pool(pool_file)
+        assert pool["conversations"][CONV_C1]["last_seq"] == 3429
+        assert pool["conversations"][CONV_C1]["name"] == "彻彻"
+        assert pool["links"][legacy_url]["conv_id"] == CONV_C1

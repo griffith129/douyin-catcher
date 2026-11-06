@@ -73,9 +73,13 @@ if (Test-Port 7864) {
     Write-Host "       Video processing will fail at the summary step until it is up." -ForegroundColor Yellow
 }
 
-# --- 5) open the selection UI ---
+# --- 5) open both stations: collector panel + selection UI ---
+if ($ok8000) {
+    Write-Host "[+] opening collector panel http://127.0.0.1:8000 ..."
+    Start-Process "http://127.0.0.1:8000"
+}
 if ($ok8787) {
-    Write-Host "[+] opening http://127.0.0.1:8787/inbox in browser ..."
+    Write-Host "[+] opening selection station http://127.0.0.1:8787/inbox ..."
     Start-Process "http://127.0.0.1:8787/inbox"
 }
 

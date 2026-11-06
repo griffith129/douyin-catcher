@@ -113,6 +113,7 @@ def _share_records(msg: dict) -> list[dict]:
             "url": f"https://www.douyin.com/video/{item_id}",
             "title": (cj.get("content_title") or cj.get("aweme_title") or "").strip(),
             "author": (cj.get("content_name") or "").strip(),
+            "conv_id": msg.get("conv_id"),
             "msg_id": msg.get("msg_id"),
             "seq": msg.get("seq"),
             "timestamp": msg.get("timestamp"),
@@ -153,6 +154,7 @@ def _text_records(msg: dict) -> list[dict]:
                         "url": url,
                         "title": "",
                         "author": "",
+                        "conv_id": msg.get("conv_id"),
                         "msg_id": msg.get("msg_id"),
                         "seq": msg.get("seq"),
                         "timestamp": msg.get("timestamp"),
@@ -176,11 +178,19 @@ def load_pool(pool_file: str | Path) -> dict:
     path = Path(pool_file)
     if path.exists():
         return json.loads(path.read_text(encoding="utf-8"))
-    return {"links": {}, "last_seq": 0, "updated_at": ""}
+    return {"links": {}, "conversations": {}, "last_seq": 0, "updated_at": ""}
 
 
-def merge_into_pool(pool: dict, found: list[dict], status: str = "pending") -> int:
-    """合并新视频进池（按 URL 去重），返回新增数量。"""
+def merge_into_pool(
+    pool: dict,
+    found: list[dict],
+    status: str = "pending",
+    conv_name: str = "",
+) -> int:
+    """合并新视频进池（按 URL 去重），返回新增数量。
+
+    conv_id 来自每条记录自身；conv_name 由调用方（当前会话名）补充。
+    """
     added = 0
     for item in found:
         url = item["url"]
@@ -189,6 +199,8 @@ def merge_into_pool(pool: dict, found: list[dict], status: str = "pending") -> i
                 "status": status,
                 "title": item.get("title", ""),
                 "author": item.get("author", ""),
+                "conv_id": item.get("conv_id"),
+                "conv_name": conv_name,
                 "msg_id": item.get("msg_id"),
                 "seq": item.get("seq"),
                 "timestamp": item.get("timestamp"),
@@ -203,22 +215,74 @@ async def sync_inbox(
     base_url: str | None = None,
     conv_id: str | None = None,
     token: str | None = None,
+    conv_ids: list[str] | None = None,
 ) -> dict:
-    """增量同步：拉取新消息 → 提取视频 → 合并入池 → 写回。返回统计。"""
+    """多会话增量同步：每个会话独立记录 last_seq，按会话分组入池。
+
+    conv_ids 为空时同步采集服务中的全部会话；conv_id 为旧版单会话参数。
+    池结构：{"links": {...}, "conversations": {conv_id: {"name", "last_seq"}}}。
+    """
     base_url = base_url or config.INBOX_API_BASE_URL
-    conv_id = normalize_conv_id(conv_id or config.INBOX_CONV_ID)
     token = token or config.INBOX_API_TOKEN
-    if not conv_id:
-        raise RuntimeError("缺少 INBOX_CONV_ID（会话 ID）")
+    if conv_id:
+        conv_ids = [conv_id]
     pool = load_pool(pool_file)
-    messages = await fetch_messages(
-        base_url, conv_id, token=token, after_seq=pool.get("last_seq") or 0
+    pool.setdefault("conversations", {})
+    convs_meta = {
+        normalize_conv_id(c.get("conv_id") or ""): c
+        for c in await fetch_conversations(base_url, token)
+        if c.get("conv_id")
+    }
+    if not conv_ids:
+        conv_ids = list(convs_meta)
+    if not conv_ids:
+        raise RuntimeError("采集服务中没有任何会话")
+
+    # 旧版单会话池迁移：seed 配置会话并把无 conv_id 的存量链接归入
+    if not pool["conversations"] and pool.get("last_seq"):
+        legacy = normalize_conv_id(config.INBOX_CONV_ID)
+        if legacy:
+            pool["conversations"][legacy] = {
+                "name": (convs_meta.get(legacy) or {}).get("name") or legacy,
+                "last_seq": int(pool["last_seq"]),
+            }
+            for it in pool["links"].values():
+                if not it.get("conv_id"):
+                    it["conv_id"] = legacy
+
+    added = 0
+    for cid in conv_ids:
+        cid = normalize_conv_id(cid)
+        if not cid:
+            continue
+        state = pool["conversations"].setdefault(
+            cid,
+            {"name": (convs_meta.get(cid) or {}).get("name") or cid, "last_seq": 0},
+        )
+        if (convs_meta.get(cid) or {}).get("name"):
+            state["name"] = convs_meta[cid]["name"]
+        messages = await fetch_messages(
+            base_url, cid, token=token, after_seq=state.get("last_seq") or 0
+        )
+        found = extract_links(messages)
+        for rec in found:  # 消息缺 conv_id 字段时按当前会话补全
+            if not rec.get("conv_id"):
+                rec["conv_id"] = cid
+        added += merge_into_pool(pool, found, conv_name=state["name"])
+        seqs = [int(m.get("seq") or 0) for m in messages]
+        if seqs:
+            state["last_seq"] = max(int(state.get("last_seq") or 0), max(seqs))
+
+    pool["last_seq"] = max(
+        (int(s.get("last_seq") or 0) for s in pool["conversations"].values()), default=0
     )
-    found = extract_links(messages)
-    added = merge_into_pool(pool, found)
-    seqs = [int(m.get("seq") or 0) for m in messages]
-    if seqs:
-        pool["last_seq"] = max(int(pool.get("last_seq") or 0), max(seqs))
     pool["updated_at"] = time.strftime("%Y-%m-%d %H:%M")
-    Path(pool_file).write_text(json.dumps(pool, ensure_ascii=False, indent=2), encoding="utf-8")
-    return {"added": added, "total": len(pool["links"]), "last_seq": pool["last_seq"]}
+    Path(pool_file).write_text(
+        json.dumps(pool, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    return {
+        "added": added,
+        "total": len(pool["links"]),
+        "last_seq": pool["last_seq"],
+        "conversations": len(pool["conversations"]),
+    }

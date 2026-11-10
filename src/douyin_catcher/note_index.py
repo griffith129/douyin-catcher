@@ -34,6 +34,11 @@ def _preview(md: str, limit: int = 300) -> str:
     return text[:limit]
 
 
+def preview_from_md(md: str, limit: int = 300) -> str:
+    """公开接口：从笔记 Markdown 提取精华版预览（pipeline 自动收录用）。"""
+    return _preview(md, limit)
+
+
 def build_index(notes_dir: str | Path) -> list[dict]:
     """扫描目录下全部 .md，返回按日期降序的索引条目列表。"""
     entries: list[dict] = []

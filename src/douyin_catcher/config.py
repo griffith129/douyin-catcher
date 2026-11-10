@@ -29,6 +29,7 @@ class Config:
 
     NOTION_TOKEN: str = os.getenv("NOTION_TOKEN", "")  # integration secret（ntn_ 开头）
     NOTION_PARENT_PAGE_ID: str = os.getenv("NOTION_PARENT_PAGE_ID", "")
+    NOTION_DB_ID: str = os.getenv("NOTION_DB_ID", "")  # 知识库 database ID；空 = 跳过自动插行
 
     INBOX_API_BASE_URL: str = os.getenv("INBOX_API_BASE_URL", "http://127.0.0.1:8000")
     INBOX_API_TOKEN: str = os.getenv("INBOX_API_TOKEN", "")

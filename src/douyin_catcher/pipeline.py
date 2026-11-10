@@ -11,6 +11,7 @@ from .audio import extract_audio
 from .config import config
 from .downloader import download_video
 from .note import build_markdown, save_note
+from .note_index import preview_from_md
 from .notion import upload_note
 from .parser import parse_share_text
 from .summarizer import correct_transcript, summarize
@@ -39,6 +40,22 @@ def _git_commit(note_path: Path, repo_dir: Path) -> str | None:
         )
         return "committed"
     except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
+
+
+async def _maybe_enrich(meta: dict, preview: str) -> dict | None:
+    """全自动收录（autotax）：短标题/分类/标签/概述 → 本地索引/批次 → Notion 插行。
+
+    任何失败只记录日志，不影响 MVP 主流程（笔记已落盘）。
+    """
+    if not meta.get("aweme_id") or not preview:
+        return None
+    try:
+        from .autotax import enrich_and_publish
+
+        return await enrich_and_publish(meta, preview, api_key="")
+    except Exception as e:  # ponytail: 收录失败不丢笔记，重跑脚本可补
+        print(f"[autotax] 自动收录失败（笔记已保留）: {e}")
         return None
 
 
@@ -79,6 +96,12 @@ async def process_link(
     notion_url = await _maybe_upload_to_notion(meta, summary, transcript)
     if notion_url:
         print(f"[notion] 笔记已收录: {notion_url}")
+
+    # 全自动收录：短标题/分类/标签/概述 → 本地索引/批次 → Notion 知识库插行（失败不影响主流程）
+    meta["note_path"] = str(note_path)
+    entry = await _maybe_enrich(meta, preview_from_md(note_path.read_text(encoding="utf-8")))
+    if entry:
+        print(f"[autotax] 已收录: {entry['category']} / {entry['subcategory']} ← {entry['short_title']}")
 
     shutil.rmtree(run_work, ignore_errors=True)
 

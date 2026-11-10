@@ -258,6 +258,22 @@ h2.sec{font-size:16px;margin:26px 0 10px}
 <a href="__LOG2__" target="_blank">打开更新日志 v2 →</a></div>
 </div>
 
+<h2 class="sec">第二轮 · 大类按钮浏览 + LLM 短标题</h2>
+<div class="grid2">
+<div class="opt"><h3>A5 大类按钮视图<span class="badge b-notion">Notion</span></h3>
+<p>list 视图顶部有「分类」快速筛选按钮组，点按钮即过滤出该大类，行 = 标题+标签+概述。数据实时零维护。</p>
+<a href="__DB__" target="_blank">打开 database → 切到「A5 大类按钮视图」</a></div>
+<div class="opt"><h3>A6 分类聚合子页<span class="badge b-notion">Notion</span></h3>
+<p>每个大类一个「分类 · X」子页，页内嵌该类专属列表视图（实时同步）。点分类 = 进入该类专属空间。</p>
+<a href="__DB__" target="_blank">在父页面「抖音知识推送整理」下打开「分类 · ××」子页</a></div>
+<div class="opt"><h3>A7 大类按钮手风琴<span class="badge b-web">本地 Web</span></h3>
+<p>大类按钮横排 → 点击展开该类行（短标题+标签+摘要），点标题新窗口打开文档。完全按描述交互实现。</p>
+<a href="/demo/cat-accordion">进入手风琴 →</a></div>
+<div class="opt"><h3>T1 LLM 短标题对比<span class="badge b-web">本地 Web</span></h3>
+<p>39 篇全量预览：新短标题（≤18字、去 #/@/钩子语）vs 原标题。确认后 database Name 将替换为短标题。</p>
+<a href="/demo/titles">查看对比 →</a></div>
+</div>
+
 <div class="link-list" style="margin-top:22px"><h2>体验建议</h2>
 <p class="note">想象视频量到 300 篇：A 组选一个你觉得"找视频最不累"的；B 组选一个"看完更新最快决定读哪篇"的。可组合（如 A4+B3）。</p></div>
 </div></body></html>"""
@@ -407,6 +423,99 @@ init();
 </script></body></html>"""
 
 
+_CAT_ACCORDION = """<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8">
+<title>A7 · 大类按钮手风琴</title><style>__CSS__
+.btnrow{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px}
+.catbtn{font-size:14px;font-weight:600;border:1px solid var(--line);background:var(--card);border-radius:24px;padding:9px 20px;cursor:pointer;display:flex;gap:8px;align-items:center}
+.catbtn .n{font-size:12px;font-weight:400;background:var(--accent-soft);color:var(--accent);border-radius:10px;padding:0 8px}
+.catbtn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.catbtn.active .n{background:rgba(255,255,255,.25);color:#fff}
+.panel{display:none;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:6px 18px 12px;margin-bottom:16px}
+.panel.open{display:block}
+.prow{display:grid;grid-template-columns:1fr 220px;gap:14px;padding:14px 4px;border-bottom:1px dashed var(--line)}
+.prow:last-child{border-bottom:none}
+.pt{font-size:15px;font-weight:600;line-height:1.5}
+.pt a{color:var(--ink);text-decoration:none}
+.pt a:hover{color:var(--accent)}
+.pm{font-size:11px;color:var(--muted);margin:3px 0 6px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.ps{font-size:13px;color:#444;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.tags{display:flex;gap:5px;flex-wrap:wrap}
+.tag{font-size:11px;background:var(--accent-soft);color:var(--accent);border-radius:5px;padding:0 7px}
+.hint{font-size:12px;color:var(--muted);margin:4px 0 14px}
+</style></head><body>
+<div class="wrap" style="max-width:920px">
+<div class="topbar"><h1>A7 · 大类按钮手风琴</h1><a href="/demo/ux">← 返回</a></div>
+<p class="hint">点击大类按钮展开该类详情：每行 = 标题 + 标签 + 摘要；点击标题在新窗口打开 Notion 总结文档。</p>
+<div class="btnrow" id="btnrow"></div>
+<div id="panels"></div>
+</div>
+<script>
+let DATA=null, active=null;
+const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function init(){
+ DATA=await (await fetch('/demo/api')).json();
+ const cats=Object.keys(DATA.categories).filter(c=>DATA.index.some(e=>e.category===c));
+ document.getElementById('btnrow').innerHTML=cats.map(c=>{
+  const n=DATA.index.filter(e=>e.category===c).length;
+  return `<button class="catbtn" data-c="${esc(c)}" onclick="toggle(this)">${esc(c)}<span class="n">${n}</span></button>`;
+ }).join('');
+}
+function toggle(el){
+ const c=el.dataset.c;
+ if(active===c){active=null;render();return;}
+ active=c;render();
+}
+function render(){
+ document.querySelectorAll('.catbtn').forEach(b=>b.classList.toggle('active',b.dataset.c===active));
+ const items=DATA.index.filter(e=>e.category===active).sort((a,b)=>b.date.localeCompare(a.date));
+ document.getElementById('panels').innerHTML=active?`<div class="panel open">${
+  items.map(e=>`
+  <div class="prow"><div>
+    <div class="pt"><a href="${e.notion_url||e.source_url}" target="_blank">${esc(e.short_title||e.title)}</a></div>
+    <div class="pm"><span class="chip sub">${esc(e.subcategory)}</span><span>${esc(e.author)}</span><span>${esc(e.date)}</span>
+      <a href="${e.source_url}" target="_blank" style="color:var(--accent)">来源↗</a>
+      ${e.short_title?`<span title="${esc(e.title)}" style="cursor:help">原标题…</span>`:''}</div>
+    <div class="ps">${esc(e.preview||'')}</div>
+  </div>
+  <div class="tags" style="align-content:start">${(e.tags||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>
+  </div>`).join('')||'<div class="empty">该类暂无视频</div>'}</div>`:'';
+}
+init();
+</script></body></html>"""
+
+_TITLES = """<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8">
+<title>T1 · LLM 短标题前后对比</title><style>__CSS__
+table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+th{font-size:12px;color:var(--muted);text-align:left;padding:10px 12px;background:#fafaf8;border-bottom:1px solid var(--line)}
+td{font-size:13px;padding:9px 12px;border-bottom:1px dashed var(--line);vertical-align:top}
+tr:last-child td{border-bottom:none}
+td.new{font-weight:600}
+td.old{color:var(--muted);font-size:12px}
+.len{font-size:11px;color:var(--muted)}
+.ok{color:var(--green)} .warn{color:var(--orange)}
+</style></head><body>
+<div class="wrap">
+<div class="topbar"><h1>T1 · LLM 短标题（39 篇全量预览）</h1><a href="/demo/ux">← 返回</a></div>
+<p class="sub">新标题 ≤18 字，已去除 #话题 / @用户 / 推广钩子语。确认方案后：database Name 换为短标题，原标题存入「原标题」property，笔记 frontmatter 不动。</p>
+<table><thead><tr><th style="width:30%">新短标题</th><th style="width:12%">字数</th><th>原标题</th></tr></thead>
+<tbody id="tb"></tbody></table>
+</div>
+<script>
+const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+(async()=>{
+ const DATA=await (await fetch('/demo/api')).json();
+ const seen=new Set();
+ document.getElementById('tb').innerHTML=DATA.index.map(e=>{
+  const st=e.short_title||'（未生成）';
+  const dup=seen.has(st);seen.add(st);
+  return `<tr><td class="new">${esc(st)}${dup?' <span class="warn">⚠同名</span>':''}</td>
+  <td><span class="len ${st.length<=18?'ok':'warn'}">${st.length} 字</span></td>
+  <td class="old">${esc(e.title)}</td></tr>`;
+ }).join('');
+})();
+</script></body></html>"""
+
+
 def register(app):
     @app.get("/demo/api")
     async def demo_api():
@@ -445,3 +554,11 @@ def register(app):
     @app.get("/demo/batch-cards", response_class=HTMLResponse)
     async def demo_batch_cards():
         return _BATCH_CARDS.replace("__CSS__", _CSS)
+
+    @app.get("/demo/cat-accordion", response_class=HTMLResponse)
+    async def demo_cat_accordion():
+        return _CAT_ACCORDION.replace("__CSS__", _CSS)
+
+    @app.get("/demo/titles", response_class=HTMLResponse)
+    async def demo_titles():
+        return _TITLES.replace("__CSS__", _CSS)

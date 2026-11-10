@@ -100,3 +100,15 @@ class TestUxPages:
         r = client.get("/demo/batch-cards")
         assert r.status_code == 200
         assert "/demo/api" in r.text
+
+    def test_cat_accordion(self, tmp_path, monkeypatch):
+        _seed_demo_data(tmp_path, monkeypatch)
+        r = client.get("/demo/cat-accordion")
+        assert r.status_code == 200
+        assert "/demo/api" in r.text
+
+    def test_titles_preview(self, tmp_path, monkeypatch):
+        _seed_demo_data(tmp_path, monkeypatch)
+        r = client.get("/demo/titles")
+        assert r.status_code == 200
+        assert "short_title" in r.text.replace(" ", "") or "短标题" in r.text

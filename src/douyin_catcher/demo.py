@@ -211,6 +211,201 @@ _V2 = """<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8">
 </div>
 </div></body></html>"""
 
+_UX = """<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8">
+<title>UX 优化 Demo · 8 案体验</title><style>__CSS__
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.opt{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.opt h3{font-size:14px;margin-bottom:4px}
+.opt p{font-size:12px;color:var(--muted);margin-bottom:8px}
+.opt a{font-size:13px;color:var(--accent);text-decoration:none;font-weight:600}
+.badge{display:inline-block;font-size:10px;border-radius:5px;padding:0 6px;margin-left:6px;vertical-align:1px}
+.b-notion{background:#f0fdf4;color:var(--green)} .b-web{background:var(--accent-soft);color:var(--accent)}
+h2.sec{font-size:16px;margin:26px 0 10px}
+</style></head><body>
+<div class="wrap">
+<div class="topbar"><h1>UX 优化 Demo · 8 案体验</h1><a href="/demo">← 返回</a></div>
+<p class="sub">功能A：分类下大量视频的直观浏览（标签+摘要）。功能B：本次更新视图的快速导读（标题跳文档/标签/概述卡）。</p>
+
+<h2 class="sec">功能 A · 分类内大量视频浏览</h2>
+<div class="grid2">
+<div class="opt"><h3>A1 分类画廊<span class="badge b-notion">Notion</span></h3>
+<p>Gallery 视图：卡片直接显示 标题+标签+概述（概述/标签已回填为 property），小卡片高密度滚动。规模：数百篇内舒适。</p>
+<a href="__DB__" target="_blank">打开 database → 切到「A1 分类画廊」视图</a></div>
+<div class="opt"><h3>A2 分类清单<span class="badge b-notion">Notion</span></h3>
+<p>List 视图按细类分组折叠：密度最高，展开某细类即见该类全部行（标题+标签+概述），适合类别多、每类几十篇。</p>
+<a href="__DB__" target="_blank">打开 database → 切到「A2 分类清单」视图</a></div>
+<div class="opt"><h3>A3 细类看板<span class="badge b-notion">Notion</span></h3>
+<p>看板改按「细类」分列（不再是宽泛大类），列内卡片含标签+概述。解决原方案"一个分类 30+ 卡片难扫读"的痛点。</p>
+<a href="__DB__" target="_blank">打开 database → 切到「A3 细类看板」视图</a></div>
+<div class="opt"><h3>A4 分类阅读室<span class="badge b-web">本地 Web</span></h3>
+<p>左栏大类/细类树 + 右侧密集列表：每行 标题+标签chips+两行摘要+元数据，即时搜索与细类过滤。信息密度与交互自由度最高。</p>
+<a href="/demo/reading-room">进入阅读室 →</a></div>
+</div>
+
+<h2 class="sec">功能 B · 本次更新的快速导读</h2>
+<div class="grid2">
+<div class="opt"><h3>B1 更新详情表<span class="badge b-notion">Notion</span></h3>
+<p>「本次更新」表格版：列为 标题(点击即打开总结文档)+标签+概述+日期。点击标题 → Notion 侧边 peek 直接预览文档全文。</p>
+<a href="__DB__" target="_blank">打开 database → 切到「B1 本次更新·详情」视图</a></div>
+<div class="opt"><h3>B2 更新画廊<span class="badge b-notion">Notion</span></h3>
+<p>「本次更新」画廊版：每批视频一张卡（标题+标签+概述），点击卡片即打开文档。视觉扫读最直观。</p>
+<a href="__DB__" target="_blank">打开 database → 切到「B2 本次更新·画廊」视图</a></div>
+<div class="opt"><h3>B3 批次卡片墙<span class="badge b-web">本地 Web</span></h3>
+<p>本次批次视频排成卡片墙：点击标题跳总结文档；点「视频概述」按钮 → 当前页弹出概述卡片（含全文摘要+标签+元数据）。</p>
+<a href="/demo/batch-cards">进入卡片墙 →</a></div>
+<div class="opt"><h3>B4 Toggle 更新日志<span class="badge b-notion">Notion</span></h3>
+<p>更新日志页升级：每条视频一个折叠块（toggle），收起时只见标题链接，展开即显 概述+标签 的内联摘要卡。纯 Notion 原生。</p>
+<a href="__LOG2__" target="_blank">打开更新日志 v2 →</a></div>
+</div>
+
+<div class="link-list" style="margin-top:22px"><h2>体验建议</h2>
+<p class="note">想象视频量到 300 篇：A 组选一个你觉得"找视频最不累"的；B 组选一个"看完更新最快决定读哪篇"的。可组合（如 A4+B3）。</p></div>
+</div></body></html>"""
+
+_READING_ROOM = """<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8">
+<title>A4 · 分类阅读室</title><style>__CSS__
+.app{display:grid;grid-template-columns:250px 1fr;height:100vh}
+.side{background:var(--card);border-right:1px solid var(--line);overflow-y:auto;padding:14px 10px}
+.side h1{font-size:15px;margin-bottom:2px}
+.side .tip{font-size:11px;color:var(--muted);margin-bottom:10px}
+.main{overflow-y:auto;padding:20px 24px}
+.searchbar{position:sticky;top:0;background:var(--bg);padding-bottom:10px;z-index:2;display:flex;gap:10px}
+.row{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin-bottom:10px}
+.rtitle{font-size:15px;font-weight:600}
+.rtitle a{color:var(--ink);text-decoration:none}
+.rtitle a:hover{color:var(--accent)}
+.rmeta{font-size:11px;color:var(--muted);margin:2px 0 6px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.rsum{font-size:13px;color:#444;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.rsum.open{-webkit-line-clamp:unset}
+.tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+.tag{font-size:11px;background:var(--accent-soft);color:var(--accent);border-radius:5px;padding:0 7px}
+.more{font-size:12px;color:var(--accent);background:none;border:none;cursor:pointer;padding:0;margin-top:4px}
+.crumb{font-size:12px;color:var(--muted);margin-bottom:8px}
+</style></head><body>
+<div class="app">
+<div class="side"><h1>📚 分类阅读室</h1><div class="tip">A4 · 点大类→细类逐级下钻</div><div id="tree"></div></div>
+<div class="main">
+<div class="searchbar"><input id="q" type="search" placeholder="搜索标题 / 标签 / 摘要…" style="flex:1;padding:9px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;background:#fff" oninput="render()"></div>
+<div class="crumb" id="crumb"></div>
+<div id="list"></div>
+</div></div>
+<script>
+let DATA=null, cat=null, sub=null;
+const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function init(){
+ DATA=await (await fetch('/demo/api')).json();
+ let html=`<div class="cat"><div class="cat-head" data-c="" onclick="pickCat(this)"><span>全部</span><span class="n">${DATA.index.length}</span></div></div>`;
+ for(const [c,subs] of Object.entries(DATA.categories)){
+  const n=DATA.index.filter(e=>e.category===c).length;
+  html+=`<div class="cat"><div class="cat-head" data-c="${esc(c)}" onclick="pickCat(this)"><span>${esc(c)}</span><span class="n">${n}</span></div>`;
+  html+='<div class="subs" style="padding-left:10px;display:none">'+subs.map(s=>{
+    const sn=DATA.index.filter(e=>e.category===c&&e.subcategory===s).length;
+    return `<div class="sub-item" data-c="${esc(c)}" data-s="${esc(s)}" onclick="pickSub(this)" style="font-size:12px;color:var(--muted);padding:4px 8px;border-radius:6px;cursor:pointer">${esc(s)} <span style="opacity:.6">${sn}</span></div>`;}).join('')+'</div></div>';
+ }
+ document.getElementById('tree').innerHTML=html;
+ render();
+}
+function pickCat(el){
+ document.querySelectorAll('.cat-head').forEach(x=>x.classList.remove('active'));
+ document.querySelectorAll('.sub-item').forEach(x=>x.classList.remove('active'));
+ el.classList.add('active');cat=el.dataset.c;sub=null;
+ document.querySelectorAll('.cat-head').forEach(h=>{
+  const s=h.parentElement.querySelector('.subs');
+  if(s) s.classList.toggle('open', h.dataset.c===cat);
+ });
+ render();
+}
+function pickSub(el){
+ document.querySelectorAll('.sub-item').forEach(x=>{x.style.color='';x.style.fontWeight=''});
+ el.style.color='var(--accent)';el.style.fontWeight='600';
+ sub=(sub===el.dataset.s)?null:el.dataset.s;render();
+}
+function render(){
+ const q=document.getElementById('q').value.trim().toLowerCase();
+ let items=DATA.index.filter(e=>(!cat||e.category===cat)&&(!sub||e.subcategory===sub)&&
+  (!q||(e.title+' '+(e.tags||[]).join(' ')+' '+(e.preview||'')).toLowerCase().includes(q)));
+ items.sort((a,b)=>(b.tags||[]).length-(a.tags||[]).length||b.date.localeCompare(a.date));
+ document.getElementById('crumb').textContent=[cat||'全部分类',sub].filter(Boolean).join(' › ')+` · ${items.length} 篇`;
+ document.getElementById('list').innerHTML=items.map((e,i)=>`
+  <div class="row"><div class="rtitle">${i+1}. <a href="${e.notion_url||e.source_url}" target="_blank">${esc(e.title)}</a></div>
+  <div class="rmeta"><span class="chip">${esc(e.category)}</span><span class="chip sub">${esc(e.subcategory)}</span>
+  <span>${esc(e.author)}</span><span>${esc(e.date)}</span>
+  <a href="${e.source_url}" target="_blank" style="color:var(--accent)">来源↗</a></div>
+  <div class="rsum" id="s${i}">${esc(e.preview||'')}</div>
+  <div class="tags">${(e.tags||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>
+  <button class="more" onclick="const s=document.getElementById('s${i}');s.classList.toggle('open');this.textContent=s.classList.contains('open')?'收起 ▴':'展开摘要 ▾'">展开摘要 ▾</button>
+  </div>`).join('')||'<div class="empty">没有匹配的笔记</div>';
+}
+init();
+</script></body></html>"""
+
+_BATCH_CARDS = """<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8">
+<title>B3 · 本次更新卡片墙</title><style>__CSS__
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.cardx{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:8px}
+.cardx .t{font-size:14px;font-weight:600;line-height:1.45}
+.cardx .t a{color:var(--ink);text-decoration:none}
+.cardx .t a:hover{color:var(--accent)}
+.cardx .m{font-size:11px;color:var(--muted)}
+.cardx .tags{display:flex;gap:5px;flex-wrap:wrap}
+.cardx .tag{font-size:11px;background:var(--accent-soft);color:var(--accent);border-radius:5px;padding:0 7px}
+.btn{align-self:flex-start;font-size:12px;color:var(--accent);background:var(--accent-soft);border:none;border-radius:7px;padding:5px 12px;cursor:pointer}
+.btn:hover{filter:brightness(.96)}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9;align-items:center;justify-content:center}
+.modal-bg.open{display:flex}
+.modal{background:#fff;border-radius:14px;max-width:640px;width:92%;max-height:80vh;overflow-y:auto;padding:24px}
+.modal h3{font-size:16px;margin-bottom:6px}
+.modal .m{font-size:12px;color:var(--muted);margin-bottom:12px}
+.modal .tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.modal .tag{font-size:12px;background:var(--accent-soft);color:var(--accent);border-radius:6px;padding:2px 9px}
+.modal .body{font-size:14px;line-height:1.8;color:#333}
+.closex{float:right;font-size:18px;color:var(--muted);cursor:pointer;border:none;background:none}
+.batchbar{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.bbtn{font-size:13px;border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 14px;cursor:pointer}
+.bbtn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+</style></head><body>
+<div class="wrap">
+<div class="topbar"><h1>B3 · 本次更新卡片墙</h1><a href="/demo/ux">← 返回</a></div>
+<p class="sub">点击标题 → 新窗口打开 Notion 总结文档；点「视频概述」→ 当前页弹出摘要卡片。</p>
+<div class="batchbar" id="batchbar"></div>
+<div class="cards" id="cards"></div></div>
+<div class="modal-bg" id="mbg" onclick="if(event.target===this)this.classList.remove('open')">
+<div class="modal" id="modal"></div></div>
+<script>
+let DATA=null, bid=null;
+const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function init(){
+ DATA=await (await fetch('/demo/api')).json();
+ bid=DATA.batches[0]&&DATA.batches[0].batch_id;
+ document.getElementById('batchbar').innerHTML=DATA.batches.map(b=>
+  `<button class="bbtn${b.batch_id===bid?' active':''}" onclick="bid='${b.batch_id}';document.querySelectorAll('.bbtn').forEach(x=>x.classList.remove('active'));this.classList.add('active');render()">${b.batch_id}（${b.created_at}）</button>`).join('');
+ render();
+}
+function byId(id){return DATA.index.find(e=>e.aweme_id===id)}
+function render(){
+ const b=DATA.batches.find(x=>x.batch_id===bid);
+ document.getElementById('cards').innerHTML=(b?b.items:[]).map(it=>{
+  const e=byId(it.aweme_id)||it;
+  return `<div class="cardx"><div class="t"><a href="${it.notion_url||e.source_url||'#'}" target="_blank">${esc(it.title)}</a></div>
+  <div class="m">${esc(e.category||'')} › ${esc(e.subcategory||'')} · ${esc(e.author||it.author||'')} · ${esc(e.date||'')}</div>
+  <div class="tags">${(e.tags||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>
+  <button class="btn" onclick="showModal('${it.aweme_id}')">视频概述</button></div>`;
+ }).join('')||'<div class="empty">该批次无视频</div>';
+}
+function showModal(id){
+ const e=byId(id);if(!e)return;
+ document.getElementById('modal').innerHTML=`
+  <button class="closex" onclick="document.getElementById('mbg').classList.remove('open')">✕</button>
+  <h3>${esc(e.title)}</h3>
+  <div class="m">${esc(e.category)} › ${esc(e.subcategory)} · ${esc(e.author)} · ${esc(e.date)} ·
+   <a href="${e.notion_url||e.source_url}" target="_blank" style="color:var(--accent)">打开完整笔记↗</a></div>
+  <div class="tags">${(e.tags||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>
+  <div class="body">${esc(e.preview||'（无概述）')}…</div>`;
+ document.getElementById('mbg').classList.add('open');
+}
+init();
+</script></body></html>"""
+
 
 def register(app):
     @app.get("/demo/api")
@@ -233,3 +428,20 @@ def register(app):
             .replace("__DB__", meta.get("database_url", "https://www.notion.so"))
             .replace("__LOG__", meta.get("log_url", "https://www.notion.so"))
         )
+
+    @app.get("/demo/ux", response_class=HTMLResponse)
+    async def demo_ux():
+        meta = _demo_payload()["meta"]
+        return (
+            _UX.replace("__CSS__", _CSS)
+            .replace("__DB__", meta.get("database_url", "https://www.notion.so"))
+            .replace("__LOG2__", meta.get("log_url_v2", meta.get("log_url", "https://www.notion.so")))
+        )
+
+    @app.get("/demo/reading-room", response_class=HTMLResponse)
+    async def demo_reading_room():
+        return _READING_ROOM.replace("__CSS__", _CSS)
+
+    @app.get("/demo/batch-cards", response_class=HTMLResponse)
+    async def demo_batch_cards():
+        return _BATCH_CARDS.replace("__CSS__", _CSS)

@@ -79,3 +79,24 @@ class TestDemoPages:
         r = client.get("/demo/v2")
         assert r.status_code == 200
         assert "notion.so/db" in r.text
+
+
+class TestUxPages:
+    def test_ux_hub_lists_all_options(self, tmp_path, monkeypatch):
+        _seed_demo_data(tmp_path, monkeypatch)
+        r = client.get("/demo/ux")
+        assert r.status_code == 200
+        for marker in ("分类画廊", "分类清单", "细类看板", "阅读室", "本次更新", "卡片墙", "toggle"):
+            assert marker in r.text
+
+    def test_reading_room(self, tmp_path, monkeypatch):
+        _seed_demo_data(tmp_path, monkeypatch)
+        r = client.get("/demo/reading-room")
+        assert r.status_code == 200
+        assert "/demo/api" in r.text
+
+    def test_batch_cards(self, tmp_path, monkeypatch):
+        _seed_demo_data(tmp_path, monkeypatch)
+        r = client.get("/demo/batch-cards")
+        assert r.status_code == 200
+        assert "/demo/api" in r.text

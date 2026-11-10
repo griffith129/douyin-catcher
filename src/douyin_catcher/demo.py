@@ -424,7 +424,7 @@ init();
 
 
 _CAT_ACCORDION = """<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8">
-<title>A7 · 大类按钮手风琴</title><style>__CSS__
+<title>A7 · 大类按钮手风琴 + 详情抽屉</title><style>__CSS__
 .btnrow{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px}
 .catbtn{font-size:14px;font-weight:600;border:1px solid var(--line);background:var(--card);border-radius:24px;padding:9px 20px;cursor:pointer;display:flex;gap:8px;align-items:center}
 .catbtn .n{font-size:12px;font-weight:400;background:var(--accent-soft);color:var(--accent);border-radius:10px;padding:0 8px}
@@ -432,25 +432,65 @@ _CAT_ACCORDION = """<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8">
 .catbtn.active .n{background:rgba(255,255,255,.25);color:#fff}
 .panel{display:none;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:6px 18px 12px;margin-bottom:16px}
 .panel.open{display:block}
-.prow{display:grid;grid-template-columns:1fr 220px;gap:14px;padding:14px 4px;border-bottom:1px dashed var(--line)}
+.prow{display:grid;grid-template-columns:1fr 210px;gap:14px;padding:14px 4px;border-bottom:1px dashed var(--line);cursor:pointer;transition:background .12s}
 .prow:last-child{border-bottom:none}
+.prow:hover{background:var(--accent-soft)}
+.prow.active{background:var(--accent-soft)}
 .pt{font-size:15px;font-weight:600;line-height:1.5}
-.pt a{color:var(--ink);text-decoration:none}
-.pt a:hover{color:var(--accent)}
 .pm{font-size:11px;color:var(--muted);margin:3px 0 6px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .ps{font-size:13px;color:#444;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.tags{display:flex;gap:5px;flex-wrap:wrap}
+.tags{display:flex;gap:5px;flex-wrap:wrap;align-content:start}
 .tag{font-size:11px;background:var(--accent-soft);color:var(--accent);border-radius:5px;padding:0 7px}
 .hint{font-size:12px;color:var(--muted);margin:4px 0 14px}
+.overlay{position:fixed;inset:0;background:rgba(15,23,42,.25);opacity:0;pointer-events:none;transition:.2s;z-index:8}
+.overlay.open{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:-460px;width:440px;max-width:92vw;height:100vh;background:var(--card);box-shadow:-6px 0 24px rgba(0,0,0,.12);z-index:9;transition:right .25s ease;display:flex;flex-direction:column}
+.drawer.open{right:0}
+.dhead{padding:18px 20px 12px;border-bottom:1px solid var(--line);position:relative}
+.dclose{position:absolute;top:14px;right:16px;width:32px;height:32px;border-radius:8px;border:1px solid var(--line);background:#fff;font-size:15px;cursor:pointer;color:var(--muted)}
+.dclose:hover{color:var(--ink);border-color:var(--muted)}
+.dt{font-size:17px;font-weight:700;line-height:1.5;padding-right:36px}
+.dorig{font-size:12px;color:var(--muted);margin-top:5px;line-height:1.5;max-height:40px;overflow:hidden}
+.dbody{flex:1;overflow-y:auto;padding:16px 20px 20px}
+.dsec{margin-bottom:16px}
+.dlabel{font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:600;letter-spacing:.05em}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip2{font-size:12px;border-radius:6px;padding:2px 10px;background:var(--accent-soft);color:var(--accent)}
+.chip2.sub{background:#f0fdf4;color:var(--green)}
+.dsummary{font-size:13px;line-height:1.85;color:#333;background:#fafaf8;border:1px dashed var(--line);border-radius:10px;padding:12px 14px;max-height:40vh;overflow-y:auto}
+.dbtns{display:flex;gap:10px;margin-top:18px}
+.dbtn{flex:1;text-align:center;font-size:14px;font-weight:600;border-radius:9px;padding:11px 0;text-decoration:none;cursor:pointer}
+.dbtn.primary{background:var(--accent);color:#fff}
+.dbtn.primary:hover{filter:brightness(1.05)}
+.dbtn.ghost{border:1px solid var(--line);color:var(--ink);background:#fff}
+.dbtn.ghost:hover{border-color:var(--accent);color:var(--accent)}
+.empty{color:var(--muted);font-size:13px;padding:30px;text-align:center}
 </style></head><body>
 <div class="wrap" style="max-width:920px">
-<div class="topbar"><h1>A7 · 大类按钮手风琴</h1><a href="/demo/ux">← 返回</a></div>
-<p class="hint">点击大类按钮展开该类详情：每行 = 标题 + 标签 + 摘要；点击标题在新窗口打开 Notion 总结文档。</p>
+<div class="topbar"><h1>A7 · 大类按钮手风琴 + 详情抽屉</h1><a href="/demo/ux">← 返回</a></div>
+<p class="hint">点击大类展开 → 点击任意视频行，右侧弹出详情抽屉（分类/标签/抖音链接/概述/Notion 跳转）；点击其他行自动切换；ESC 或 ✕ 关闭。</p>
 <div class="btnrow" id="btnrow"></div>
 <div id="panels"></div>
 </div>
+<div class="overlay" id="overlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="dhead">
+    <button class="dclose" onclick="closeDrawer()" title="关闭">✕</button>
+    <div class="dt" id="dTitle"></div>
+    <div class="dorig" id="dOrig"></div>
+  </div>
+  <div class="dbody">
+    <div class="dsec"><div class="dlabel">分类</div><div class="chips" id="dCat"></div></div>
+    <div class="dsec"><div class="dlabel">标签</div><div class="chips" id="dTags"></div></div>
+    <div class="dsec"><div class="dlabel">视频概述</div><div class="dsummary" id="dSum"></div></div>
+    <div class="dbtns">
+      <a class="dbtn ghost" id="dDouyin" target="_blank">▶ 抖音视频来源</a>
+      <a class="dbtn primary" id="dNotion" target="_blank">打开 Notion 总结文档 ↗</a>
+    </div>
+  </div>
+</div>
 <script>
-let DATA=null, active=null;
+let DATA=null, active=null, curId=null;
 const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 async function init(){
  DATA=await (await fetch('/demo/api')).json();
@@ -459,26 +499,52 @@ async function init(){
   const n=DATA.index.filter(e=>e.category===c).length;
   return `<button class="catbtn" data-c="${esc(c)}" onclick="toggle(this)">${esc(c)}<span class="n">${n}</span></button>`;
  }).join('');
+ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDrawer()});
 }
 function toggle(el){
  const c=el.dataset.c;
- if(active===c){active=null;render();return;}
- active=c;render();
+ active=(active===c)?null:c;render();
 }
 function render(){
  document.querySelectorAll('.catbtn').forEach(b=>b.classList.toggle('active',b.dataset.c===active));
  const items=DATA.index.filter(e=>e.category===active).sort((a,b)=>b.date.localeCompare(a.date));
  document.getElementById('panels').innerHTML=active?`<div class="panel open">${
   items.map(e=>`
-  <div class="prow"><div>
-    <div class="pt"><a href="${e.notion_url||e.source_url}" target="_blank">${esc(e.short_title||e.title)}</a></div>
-    <div class="pm"><span class="chip sub">${esc(e.subcategory)}</span><span>${esc(e.author)}</span><span>${esc(e.date)}</span>
-      <a href="${e.source_url}" target="_blank" style="color:var(--accent)">来源↗</a>
-      ${e.short_title?`<span title="${esc(e.title)}" style="cursor:help">原标题…</span>`:''}</div>
-    <div class="ps">${esc(e.preview||'')}</div>
-  </div>
-  <div class="tags" style="align-content:start">${(e.tags||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>
+  <div class="prow${e.aweme_id===curId?' active':''}" data-id="${esc(e.aweme_id)}" onclick="openDrawer('${esc(e.aweme_id)}')">
+    <div>
+      <div class="pt">${esc(e.short_title||e.title)}</div>
+      <div class="pm"><span class="chip sub">${esc(e.subcategory)}</span><span>${esc(e.author)}</span><span>${esc(e.date)}</span></div>
+      <div class="ps">${esc(e.preview||'')}</div>
+    </div>
+    <div class="tags">${(e.tags||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>
   </div>`).join('')||'<div class="empty">该类暂无视频</div>'}</div>`:'';
+ if(curId)fillDrawer(curId);
+}
+function byId(id){return DATA.index.find(e=>e.aweme_id===id)}
+function openDrawer(id){
+ curId=id;
+ document.querySelectorAll('.prow').forEach(r=>r.classList.toggle('active',r.dataset.id===id));
+ fillDrawer(id);
+ document.getElementById('drawer').classList.add('open');
+ document.getElementById('overlay').classList.add('open');
+}
+function fillDrawer(id){
+ const e=byId(id);if(!e)return;
+ document.getElementById('dTitle').textContent=e.short_title||e.title;
+ document.getElementById('dOrig').textContent=e.short_title?('原标题：'+e.title):'';
+ document.getElementById('dCat').innerHTML=
+  `<span class="chip2">${esc(e.category)}</span><span class="chip2 sub">${esc(e.subcategory)}</span>`;
+ document.getElementById('dTags').innerHTML=(e.tags||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('')||'<span class="pm">无</span>';
+ document.getElementById('dSum').textContent=(e.preview||'（无概述）');
+ const dn=document.getElementById('dNotion');dn.href=e.notion_url||e.source_url||'#';
+ const dd=document.getElementById('dDouyin');dd.href=e.source_url||'#';
+ dd.style.display=e.source_url?'':'none';
+}
+function closeDrawer(){
+ curId=null;
+ document.getElementById('drawer').classList.remove('open');
+ document.getElementById('overlay').classList.remove('open');
+ document.querySelectorAll('.prow').forEach(r=>r.classList.remove('active'));
 }
 init();
 </script></body></html>"""

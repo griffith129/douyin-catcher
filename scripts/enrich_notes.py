@@ -48,9 +48,6 @@ async def gen_tags() -> None:
 
 def backfill_notion() -> None:
     index = json.loads(INDEX_FILE.read_text(encoding="utf-8"))
-    by_title: dict[str, dict] = {}
-    for e in index:
-        by_title[e["title"]] = e  # 同名取最后一条（内容一致）
     with httpx.Client(base_url="https://api.notion.com/v1", headers=_HEADERS, timeout=60) as c:
         # 先确保 database schema 有 概述/标签 property（PATCH 行不能新建 property）
         r = c.patch(
@@ -59,8 +56,9 @@ def backfill_notion() -> None:
         )
         r.raise_for_status()
         print("[+] schema 已含 概述/标签 property")
-        # 拉取全部行（title → page_id）
+        # 拉取全部行：优先 视频ID 匹配（Name 已是短标题，不可靠），回退原标题
         rows: dict[str, str] = {}
+        fallback: dict[str, str] = {}
         cursor = None
         while True:
             body: dict = {"page_size": 100}
@@ -68,17 +66,23 @@ def backfill_notion() -> None:
                 body["start_cursor"] = cursor
             data = c.post(f"/databases/{DB_ID}/query", json=body).json()
             for p in data.get("results", []):
-                t = p["properties"]["Name"]["title"]
+                props = p["properties"]
+                vid = props.get("视频ID", {}).get("rich_text")
+                vid = vid[0]["plain_text"] if vid else ""
+                t = props["Name"]["title"]
                 title = t[0]["plain_text"] if t else ""
-                rows[title] = p["id"]
+                if vid:
+                    rows[vid] = p["id"]
+                else:
+                    fallback[title] = p["id"]
             if not data.get("has_more"):
                 break
             cursor = data.get("next_cursor")
-        print(f"[+] database 共 {len(rows)} 行")
+        print(f"[+] database 共 {len(rows) + len(fallback)} 行（视频ID: {len(rows)}，回退标题: {len(fallback)}）")
         done = 0
-        for title, page_id in rows.items():
-            e = by_title.get(title)
-            if not e:
+        for e in index:
+            page_id = rows.get(str(e["aweme_id"])) or fallback.get(e["title"])
+            if not page_id:
                 continue
             props = {
                 "概述": {"rich_text": [{"text": {"content": summarize_preview(e.get("preview", ""))}}]},

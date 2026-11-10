@@ -25,6 +25,7 @@ META = {
     "aweme_id": "999", "title": "原标题 #AI #Agent @某人",
     "author": "作者甲", "source_url": "https://www.douyin.com/video/999",
     "captured_at": "2026-11-10 12:00", "note_path": "notes/x.md",
+    "notion_page_url": "https://notion.so/note-page-999",  # MVP 上传的总结文档子页面
 }
 
 
@@ -94,10 +95,14 @@ class TestEnrichAndPublish:
         assert entry["category"] == "AI Agent 与工作流"
         assert entry["short_title"] == "Agent的四层工作边界"
         assert entry["batch_id"]
+        assert entry["notion_url"] == META["notion_page_url"]  # 总结文档 = MVP 子页面
+        assert entry["row_url"] == "https://notion.so/row1"  # 知识库行
         index = json.loads((tmp_path / "note_index.json").read_text(encoding="utf-8"))
-        assert len(index) == 1 and index[0]["notion_url"] == "https://notion.so/row1"
+        assert len(index) == 1 and index[0]["notion_url"] == META["notion_page_url"]
+        assert index[0]["row_url"] == "https://notion.so/row1"
         batches = json.loads((tmp_path / "batches.json").read_text(encoding="utf-8"))
         assert batches[0]["daily"] is True and len(batches[0]["items"]) == 1
+        assert batches[0]["items"][0]["notion_url"] == META["notion_page_url"]
         # Notion 请求体
         body = json.loads(route.calls.last.request.content)
         props = body["properties"]
@@ -107,7 +112,11 @@ class TestEnrichAndPublish:
         assert props["原标题"]["rich_text"][0]["text"]["content"].startswith("原标题")
         assert props["标签"]["multi_select"][0]["name"] == "工作边界"
         assert props["批次"]["select"]["name"] == entry["batch_id"]
+        # 行详情首个 callout = 概述；第二个 callout = 跳转总结文档链接
         assert body["children"][0]["callout"]["rich_text"][0]["text"]["content"].startswith("📌")
+        link = body["children"][1]["callout"]["rich_text"][0]["text"]
+        assert link["content"] == "▶ 打开完整笔记（总结文档）"
+        assert link["link"]["url"] == META["notion_page_url"]
 
     @pytest.mark.asyncio
     async def test_short_title_dedup_against_index(self, tmp_path, monkeypatch):
@@ -139,8 +148,18 @@ class TestEnrichAndPublish:
         _mock_llm(monkeypatch)
         with respx.mock:
             entry = await enrich_and_publish(META, "摘要。", "k")
-            assert entry["notion_url"] == ""
+            assert entry["notion_url"] == META["notion_page_url"]  # 总结文档来自 meta
+            assert entry["row_url"] == ""  # 未插行
             assert not respx.calls  # 未发出任何 HTTP 请求
+
+    @pytest.mark.asyncio
+    async def test_date_falls_back_to_today(self, tmp_path, monkeypatch):
+        _seed(tmp_path, monkeypatch)
+        monkeypatch.setattr(config, "NOTION_DB_ID", "", raising=False)
+        _mock_llm(monkeypatch)
+        meta = {k: v for k, v in META.items() if k != "captured_at"}
+        entry = await enrich_and_publish(meta, "摘要。", "k")
+        assert entry["date"]  # 不应为 None
 
     @pytest.mark.asyncio
     async def test_notion_failure_keeps_local(self, tmp_path, monkeypatch):

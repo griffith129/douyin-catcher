@@ -6,6 +6,7 @@ note_index（索引落盘）、batch_report（批次）、config.NOTION_DB_ID（
 
 import json
 import re
+from datetime import datetime
 from pathlib import Path
 
 import httpx
@@ -115,13 +116,27 @@ async def _insert_row(entry: dict, db_id: str) -> str:
         props["采集日期"] = {"date": {"start": entry["date"]}}
     if entry.get("source_url"):
         props["视频来源"] = {"url": entry["source_url"]}
-    children = [{
-        "object": "block", "type": "callout",
-        "callout": {
-            "rich_text": [{"type": "text", "text": {"content": "📌 " + entry["preview"]}}],
-            "icon": {"emoji": "📝"},
+    children = [
+        {
+            "object": "block", "type": "callout",
+            "callout": {
+                "rich_text": [{"type": "text", "text": {"content": "📌 " + entry["preview"]}}],
+                "icon": {"emoji": "📝"},
+            },
         },
-    }]
+        {
+            "object": "block", "type": "callout",
+            "callout": {
+                "rich_text": [{
+                    "type": "text",
+                    "text": {"content": "▶ 打开完整笔记（总结文档）", "link": {"url": entry["notion_url"]}}
+                    if entry.get("notion_url")
+                    else {"type": "text", "text": {"content": "▶ 打开完整笔记（总结文档）"}},
+                }],
+                "icon": {"emoji": "📄"},
+            },
+        },
+    ]
     async with httpx.AsyncClient(base_url="https://api.notion.com/v1", headers=headers, timeout=60) as client:
         r = await client.post("/pages", json={
             "parent": {"database_id": db_id},
@@ -152,7 +167,7 @@ async def enrich_and_publish(meta: dict, preview: str, api_key: str) -> dict:
         "title": meta["title"],
         "short_title": _unique_short_title(analysis["short_title"], index),
         "author": meta.get("author", ""),
-        "date": str(meta.get("captured_at", ""))[:10] or None,
+        "date": str(meta.get("captured_at", ""))[:10] or datetime.now().strftime("%Y-%m-%d"),
         "source_url": meta.get("source_url", ""),
         "file": Path(meta.get("note_path", "")).name if meta.get("note_path") else "",
         "preview": summarize_preview(preview),
@@ -160,12 +175,14 @@ async def enrich_and_publish(meta: dict, preview: str, api_key: str) -> dict:
         "subcategory": analysis["subcategory"],
         "tags": analysis["tags"],
         "is_new_category": analysis["is_new_category"],
-        "notion_url": "",
+        # notion_url = 总结文档（MVP 子页面）；row_url = 知识库行（插行后回填）
+        "notion_url": meta.get("notion_page_url", ""),
+        "row_url": "",
     }
 
     batch_id = record_item_into_daily_batch(_BATCHES_FILE, {
         "aweme_id": entry["aweme_id"], "title": entry["short_title"],
-        "category": entry["category"], "notion_url": "",
+        "category": entry["category"], "notion_url": entry["notion_url"],
     })
     entry["batch_id"] = batch_id
 
@@ -173,7 +190,6 @@ async def enrich_and_publish(meta: dict, preview: str, api_key: str) -> dict:
     save_index(index, _INDEX_FILE)
 
     if config.NOTION_DB_ID:
-        url = await _insert_row(entry, config.NOTION_DB_ID)
-        entry["notion_url"] = url
-        save_index(index, _INDEX_FILE)  # 回写 notion_url
+        entry["row_url"] = await _insert_row(entry, config.NOTION_DB_ID)
+        save_index(index, _INDEX_FILE)  # 回写 row_url
     return entry

@@ -51,6 +51,15 @@ async def _maybe_enrich(meta: dict, preview: str) -> dict | None:
     if not meta.get("aweme_id") or not preview:
         return None
     try:
+        # parser 的 meta 可能缺 source_url/captured_at —— 从笔记 frontmatter 补全
+        note_path = meta.get("note_path")
+        if note_path and Path(note_path).exists():
+            from .note_index import parse_frontmatter
+
+            fm = parse_frontmatter(Path(note_path).read_text(encoding="utf-8"))
+            for key in ("source_url", "captured_at", "title", "author"):
+                if not meta.get(key) and fm.get(key):
+                    meta[key] = str(fm[key])
         from .autotax import enrich_and_publish
 
         return await enrich_and_publish(meta, preview, api_key="")
@@ -99,6 +108,7 @@ async def process_link(
 
     # 全自动收录：短标题/分类/标签/概述 → 本地索引/批次 → Notion 知识库插行（失败不影响主流程）
     meta["note_path"] = str(note_path)
+    meta["notion_page_url"] = notion_url or ""  # 总结文档 URL，行详情/抽屉跳转用
     entry = await _maybe_enrich(meta, preview_from_md(note_path.read_text(encoding="utf-8")))
     if entry:
         print(f"[autotax] 已收录: {entry['category']} / {entry['subcategory']} ← {entry['short_title']}")

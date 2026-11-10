@@ -625,6 +625,15 @@ def register(app):
     async def demo_cat_accordion():
         return _CAT_ACCORDION.replace("__CSS__", _CSS)
 
+    @app.get("/kb", response_class=HTMLResponse)
+    async def kb_page():
+        """正式入口：知识库手风琴 + 抽屉（数据随 pipeline 自动收录实时更新）。"""
+        return _CAT_ACCORDION.replace("__CSS__", _CSS)
+
+    @app.get("/kb/api")
+    async def kb_api():
+        return _demo_payload()
+
     @app.get("/demo/titles", response_class=HTMLResponse)
     async def demo_titles():
         return _TITLES.replace("__CSS__", _CSS)

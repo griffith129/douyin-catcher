@@ -112,3 +112,21 @@ class TestUxPages:
         r = client.get("/demo/titles")
         assert r.status_code == 200
         assert "short_title" in r.text.replace(" ", "") or "短标题" in r.text
+
+
+class TestKnowledgeBasePage:
+    """正式功能：知识库手风琴 + 抽屉（数据由 pipeline 自动更新）。"""
+
+    def test_kb_page(self, tmp_path, monkeypatch):
+        _seed_demo_data(tmp_path, monkeypatch)
+        r = client.get("/kb")
+        assert r.status_code == 200
+        assert "/demo/api" in r.text  # 数据源 = 索引/分类/批次（autotax 自动追加）
+
+    def test_kb_page_same_as_accordion(self, tmp_path, monkeypatch):
+        _seed_demo_data(tmp_path, monkeypatch)
+        assert client.get("/kb").text == client.get("/demo/cat-accordion").text
+
+    def test_kb_api_matches_demo_api(self, tmp_path, monkeypatch):
+        _seed_demo_data(tmp_path, monkeypatch)
+        assert client.get("/kb/api").json() == client.get("/demo/api").json()

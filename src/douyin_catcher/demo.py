@@ -9,6 +9,7 @@
 """
 
 import json
+import re
 from pathlib import Path
 
 from fastapi.responses import HTMLResponse
@@ -22,16 +23,27 @@ _BATCHES_FILE = Path("data/batches.json")
 _META_FILE = Path("data/demo_meta.json")
 
 _NOTION_HTTPS_PREFIX = "https://www.notion.so"
+# app.notion.com/p/<可选标题>-<32位页面ID>（可带查询串/锚点）
+_APP_NOTION_RE = re.compile(
+    r"^https://app\.notion\.com/(?:p/)?(?:[^?#]*?-)?([0-9a-f]{32})(?:[/?#].*)?$"
+)
 
 
 def to_notion_desktop_url(url: str) -> str:
     """把 Notion 页面链接转成 notion:// 协议，浏览器点击即拉起 Notion 桌面端。
 
-    非 Notion 链接（抖音来源等）原样返回；空值返回空串。
+    - https://www.notion.so/... 直接替换协议前缀；
+    - https://app.notion.com/p/<标题>-<页面ID> 提取页面 ID，转 www.notion.so 深链；
+    - 非 Notion 链接（抖音来源等）原样返回；空值返回空串。
     """
-    if url and url.startswith(_NOTION_HTTPS_PREFIX):
+    if not url:
+        return ""
+    if url.startswith(_NOTION_HTTPS_PREFIX):
         return "notion://" + url[len("https://"):]
-    return url or ""
+    m = _APP_NOTION_RE.match(url)
+    if m:
+        return f"notion://www.notion.so/{m.group(1)}"
+    return url
 
 
 def _apply_desktop_urls(payload: dict) -> dict:
@@ -454,129 +466,106 @@ init();
 
 
 _CAT_ACCORDION = """<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8">
-<title>A7 · 大类按钮手风琴 + 详情抽屉</title><style>__CSS__
-.btnrow{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px}
-.catbtn{font-size:14px;font-weight:600;border:1px solid var(--line);background:var(--card);border-radius:24px;padding:9px 20px;cursor:pointer;display:flex;gap:8px;align-items:center}
-.catbtn .n{font-size:12px;font-weight:400;background:var(--accent-soft);color:var(--accent);border-radius:10px;padding:0 8px}
-.catbtn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
-.catbtn.active .n{background:rgba(255,255,255,.25);color:#fff}
-.panel{display:none;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:6px 18px 12px;margin-bottom:16px}
-.panel.open{display:block}
-.prow{display:grid;grid-template-columns:1fr 210px;gap:14px;padding:14px 4px;border-bottom:1px dashed var(--line);cursor:pointer;transition:background .12s}
-.prow:last-child{border-bottom:none}
-.prow:hover{background:var(--accent-soft)}
-.prow.active{background:var(--accent-soft)}
-.pt{font-size:15px;font-weight:600;line-height:1.5}
-.pm{font-size:11px;color:var(--muted);margin:3px 0 6px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.ps{font-size:13px;color:#444;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.tags{display:flex;gap:5px;flex-wrap:wrap;align-content:start}
-.tag{font-size:11px;background:var(--accent-soft);color:var(--accent);border-radius:5px;padding:0 7px}
-.hint{font-size:12px;color:var(--muted);margin:4px 0 14px}
-.overlay{position:fixed;inset:0;background:rgba(15,23,42,.25);opacity:0;pointer-events:none;transition:.2s;z-index:8}
-.overlay.open{opacity:1;pointer-events:auto}
-.drawer{position:fixed;top:0;right:-460px;width:440px;max-width:92vw;height:100vh;background:var(--card);box-shadow:-6px 0 24px rgba(0,0,0,.12);z-index:9;transition:right .25s ease;display:flex;flex-direction:column}
-.drawer.open{right:0}
-.dhead{padding:18px 20px 12px;border-bottom:1px solid var(--line);position:relative}
-.dclose{position:absolute;top:14px;right:16px;width:32px;height:32px;border-radius:8px;border:1px solid var(--line);background:#fff;font-size:15px;cursor:pointer;color:var(--muted)}
-.dclose:hover{color:var(--ink);border-color:var(--muted)}
-.dt{font-size:17px;font-weight:700;line-height:1.5;padding-right:36px}
-.dorig{font-size:12px;color:var(--muted);margin-top:5px;line-height:1.5;max-height:40px;overflow:hidden}
-.dbody{flex:1;overflow-y:auto;padding:16px 20px 20px}
-.dsec{margin-bottom:16px}
-.dlabel{font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:600;letter-spacing:.05em}
-.chips{display:flex;gap:6px;flex-wrap:wrap}
-.chip2{font-size:12px;border-radius:6px;padding:2px 10px;background:var(--accent-soft);color:var(--accent)}
-.chip2.sub{background:#f0fdf4;color:var(--green)}
-.dsummary{font-size:13px;line-height:1.85;color:#333;background:#fafaf8;border:1px dashed var(--line);border-radius:10px;padding:12px 14px;max-height:40vh;overflow-y:auto}
-.dbtns{display:flex;gap:10px;margin-top:18px}
-.dbtn{flex:1;text-align:center;font-size:14px;font-weight:600;border-radius:9px;padding:11px 0;text-decoration:none;cursor:pointer}
-.dbtn.primary{background:var(--accent);color:#fff}
-.dbtn.primary:hover{filter:brightness(1.05)}
-.dbtn.ghost{border:1px solid var(--line);color:var(--ink);background:#fff}
-.dbtn.ghost:hover{border-color:var(--accent);color:var(--accent)}
-.empty{color:var(--muted);font-size:13px;padding:30px;text-align:center}
-</style></head><body>
-<div class="wrap" style="max-width:920px">
-<div class="topbar"><h1>A7 · 大类按钮手风琴 + 详情抽屉</h1><a href="/demo/ux">← 返回</a></div>
-<p class="hint">点击大类展开 → 点击任意视频行，右侧弹出详情抽屉（分类/标签/抖音链接/概述/Notion 跳转）；点击其他行自动切换；ESC 或 ✕ 关闭。</p>
-<div class="btnrow" id="btnrow"></div>
-<div id="panels"></div>
-</div>
-<div class="overlay" id="overlay" onclick="closeDrawer()"></div>
-<div class="drawer" id="drawer">
-  <div class="dhead">
-    <button class="dclose" onclick="closeDrawer()" title="关闭">✕</button>
-    <div class="dt" id="dTitle"></div>
-    <div class="dorig" id="dOrig"></div>
-  </div>
-  <div class="dbody">
-    <div class="dsec"><div class="dlabel">分类</div><div class="chips" id="dCat"></div></div>
-    <div class="dsec"><div class="dlabel">标签</div><div class="chips" id="dTags"></div></div>
-    <div class="dsec"><div class="dlabel">视频概述</div><div class="dsummary" id="dSum"></div></div>
-    <div class="dbtns">
-      <a class="dbtn ghost" id="dDouyin" target="_blank">▶ 抖音视频来源</a>
-      <a class="dbtn primary" id="dNotion" target="_blank">打开 Notion 总结文档 ↗</a>
-    </div>
-  </div>
-</div>
+<title>抖音知识库</title>
+<link rel="stylesheet" href="/static/antd/reset.min.css">
+<script src="/static/antd/react.production.min.js"></script>
+<script src="/static/antd/react-dom.production.min.js"></script>
+<script src="/static/antd/dayjs.min.js"></script>
+<script src="/static/antd/antd.min.js"></script>
+<style>body{background:#f5f5f5}.page{max-width:1080px;margin:0 auto;padding:28px 20px 60px}</style>
+</head><body>
+<div id="root"></div>
 <script>
-let DATA=null, active=null, curId=null;
-const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-async function init(){
- DATA=await (await fetch('/kb/api?desktop=1')).json();
- const cats=Object.keys(DATA.categories).filter(c=>DATA.index.some(e=>e.category===c));
- document.getElementById('btnrow').innerHTML=cats.map(c=>{
-  const n=DATA.index.filter(e=>e.category===c).length;
-  return `<button class="catbtn" data-c="${esc(c)}" onclick="toggle(this)">${esc(c)}<span class="n">${n}</span></button>`;
- }).join('');
- document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDrawer()});
+const h = React.createElement;
+const { ConfigProvider, Breadcrumb, Button, Table, Tag, Drawer, Descriptions,
+        Empty, Space, Typography } = antd;
+const zhCN = (antd.locales && antd.locales.zh_CN) || undefined;
+const { Title, Text } = Typography;
+
+function App() {
+  const [data, setData] = React.useState(null);
+  const [activeCat, setActiveCat] = React.useState(null);
+  const [drawerId, setDrawerId] = React.useState(null);
+
+  React.useEffect(() => {
+    fetch('/kb/api?desktop=1').then(r => r.json()).then(setData);
+  }, []);
+
+  if (!data) return h('div', { className: 'page' }, '加载中…');
+  const cats = Object.keys(data.categories).filter(c => data.index.some(e => e.category === c));
+  const catCount = c => data.index.filter(e => e.category === c).length;
+  const items = activeCat
+    ? data.index.filter(e => e.category === activeCat).sort((a, b) => b.date.localeCompare(a.date))
+    : [];
+  const cur = drawerId ? data.index.find(e => e.aweme_id === drawerId) : null;
+
+  const columns = [
+    { title: '标题', dataIndex: 'short_title',
+      render: (v, e) => h('span', { style: { fontWeight: 600 } }, v || e.title) },
+    { title: '标签', dataIndex: 'tags', width: 260,
+      render: tags => (tags || []).slice(0, 4).map(t =>
+        h(Tag, { color: 'blue', key: t, style: { marginInlineEnd: 4 } }, t)) },
+    { title: '概述', dataIndex: 'preview', ellipsis: true },
+    { title: '细类', dataIndex: 'subcategory', width: 120 },
+    { title: '作者', dataIndex: 'author', width: 120, ellipsis: true },
+    { title: '日期', dataIndex: 'date', width: 110,
+      sorter: (a, b) => (a.date || '').localeCompare(b.date || ''),
+      defaultSortOrder: 'descend' },
+  ];
+
+  return h('div', { className: 'page' },
+    h(Breadcrumb, { items: [{ title: '抖音知识库' }, { title: activeCat || '请选择大类' }] }),
+    h(Title, { level: 4, style: { marginTop: 8 } }, '📚 抖音知识库'),
+    h(Text, { type: 'secondary' },
+      '点击大类查看该类视频 · 点击行打开详情抽屉（分类 / 标签 / 抖音链接 / 概述 / Notion 总结文档桌面端直开）'),
+    h(Space, { wrap: true, style: { margin: '14px 0' } },
+      cats.map(c => h(Button, {
+        key: c,
+        type: activeCat === c ? 'primary' : 'default',
+        onClick: () => { setActiveCat(activeCat === c ? null : c); setDrawerId(null); },
+      }, c, ' ', h(Tag, { bordered: false, style: { marginInlineEnd: 0, background: activeCat === c ? 'rgba(255,255,255,.25)' : undefined,
+        color: activeCat === c ? '#fff' : undefined } }, catCount(c))))
+    ),
+    activeCat
+      ? h(Table, {
+          rowKey: 'aweme_id', columns, dataSource: items, size: 'middle',
+          pagination: { pageSize: 10, showSizeChanger: true, showTotal: t => `共 ${t} 篇` },
+          onRow: e => ({ onClick: () => setDrawerId(e.aweme_id), style: { cursor: 'pointer' } }),
+        })
+      : h(Empty, { description: '点击上方大类按钮展开视频列表' }),
+    h(Drawer, {
+      open: !!cur, onClose: () => setDrawerId(null), width: 460,
+      title: cur ? (cur.short_title || cur.title) : '',
+    }, cur && h(React.Fragment, null,
+      cur.short_title
+        ? h(Text, { type: 'secondary', style: { fontSize: 12 } }, '原标题：' + cur.title)
+        : null,
+      h(Descriptions, { column: 2, size: 'small', style: { marginTop: 12 }, items: [
+        { key: 'cat', label: '分类', children: cur.category || '-' },
+        { key: 'sub', label: '细类', children: cur.subcategory || '-' },
+        { key: 'author', label: '作者', children: cur.author || '-' },
+        { key: 'date', label: '采集日期', children: cur.date || '-' },
+      ] }),
+      h('div', { style: { marginTop: 12 } },
+        h(Text, { type: 'secondary' }, '标签：'),
+        (cur.tags || []).length
+          ? cur.tags.map(t => h(Tag, { key: t, color: 'blue', style: { marginInlineEnd: 4 } }, t))
+          : h(Text, { type: 'secondary' }, ' 无')),
+      h('div', { style: { marginTop: 12 } }, h(Text, { type: 'secondary' }, '视频概述：')),
+      h('div', { style: { fontSize: 13, lineHeight: 1.8, color: '#333', background: '#fafafa',
+        border: '1px dashed #d9d9d9', borderRadius: 8, padding: '10px 12px',
+        maxHeight: '40vh', overflowY: 'auto', marginTop: 6 } }, cur.preview || '（无概述）'),
+      h(Space, { style: { marginTop: 18 } },
+        h(Button, { type: 'primary', href: cur.notion_url || cur.source_url || '#', target: '_blank' },
+          '打开 Notion 总结文档 ↗'),
+        cur.source_url ? h(Button, { href: cur.source_url, target: '_blank' }, '▶ 抖音视频来源') : null)
+    ))
+  );
 }
-function toggle(el){
- const c=el.dataset.c;
- active=(active===c)?null:c;render();
-}
-function render(){
- document.querySelectorAll('.catbtn').forEach(b=>b.classList.toggle('active',b.dataset.c===active));
- const items=DATA.index.filter(e=>e.category===active).sort((a,b)=>b.date.localeCompare(a.date));
- document.getElementById('panels').innerHTML=active?`<div class="panel open">${
-  items.map(e=>`
-  <div class="prow${e.aweme_id===curId?' active':''}" data-id="${esc(e.aweme_id)}" onclick="openDrawer('${esc(e.aweme_id)}')">
-    <div>
-      <div class="pt">${esc(e.short_title||e.title)}</div>
-      <div class="pm"><span class="chip sub">${esc(e.subcategory)}</span><span>${esc(e.author)}</span><span>${esc(e.date)}</span></div>
-      <div class="ps">${esc(e.preview||'')}</div>
-    </div>
-    <div class="tags">${(e.tags||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>
-  </div>`).join('')||'<div class="empty">该类暂无视频</div>'}</div>`:'';
- if(curId)fillDrawer(curId);
-}
-function byId(id){return DATA.index.find(e=>e.aweme_id===id)}
-function openDrawer(id){
- curId=id;
- document.querySelectorAll('.prow').forEach(r=>r.classList.toggle('active',r.dataset.id===id));
- fillDrawer(id);
- document.getElementById('drawer').classList.add('open');
- document.getElementById('overlay').classList.add('open');
-}
-function fillDrawer(id){
- const e=byId(id);if(!e)return;
- document.getElementById('dTitle').textContent=e.short_title||e.title;
- document.getElementById('dOrig').textContent=e.short_title?('原标题：'+e.title):'';
- document.getElementById('dCat').innerHTML=
-  `<span class="chip2">${esc(e.category)}</span><span class="chip2 sub">${esc(e.subcategory)}</span>`;
- document.getElementById('dTags').innerHTML=(e.tags||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('')||'<span class="pm">无</span>';
- document.getElementById('dSum').textContent=(e.preview||'（无概述）');
- const dn=document.getElementById('dNotion');dn.href=e.notion_url||e.source_url||'#';
- const dd=document.getElementById('dDouyin');dd.href=e.source_url||'#';
- dd.style.display=e.source_url?'':'none';
-}
-function closeDrawer(){
- curId=null;
- document.getElementById('drawer').classList.remove('open');
- document.getElementById('overlay').classList.remove('open');
- document.querySelectorAll('.prow').forEach(r=>r.classList.remove('active'));
-}
-init();
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  h(ConfigProvider, { locale: zhCN }, h(App))
+);
 </script></body></html>"""
 
 _TITLES = """<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8">

@@ -10,6 +10,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .config import config
@@ -46,6 +47,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="douyin-catcher", lifespan=lifespan)
 register_demo(app)  # /demo 体验层（只读，不影响 MVP 路由）
+
+# antd UMD 静态资源（本地化，页面离线可用）
+_STATIC_DIR = Path(__file__).parent / "static"
+if _STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
 
 class LinkBody(BaseModel):
@@ -120,210 +126,226 @@ _INBOX_PAGE = """<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <title>douyin-catcher 视频选择台</title>
+<link rel="stylesheet" href="/static/antd/reset.min.css">
+<script src="/static/antd/react.production.min.js"></script>
+<script src="/static/antd/react-dom.production.min.js"></script>
+<script src="/static/antd/dayjs.min.js"></script>
+<script src="/static/antd/antd.min.js"></script>
 <style>
-  body { font-family: system-ui, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 16px; color: #1a1a1a; }
-  h1 { font-size: 20px; }
-  .bar { display: flex; gap: 12px; align-items: center; margin: 16px 0; flex-wrap: wrap; }
-  button { padding: 6px 14px; cursor: pointer; }
-  #searchPanel { display: none; border: 1px solid #ddd; border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; background: #fafafa; }
-  #searchPanel.open { display: block; }
-  #searchInput { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid #ccc; border-radius: 8px; font-size: 14px; }
-  .chips { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
-  .chip { cursor: pointer; font-size: 13px; padding: 4px 14px; border-radius: 14px; border: 1px solid #ccc; background: #fff; user-select: none; }
-  .chip.on { background: #e8f0fe; border-color: #378ADD; color: #185FA5; }
-  .conv { border: 1px solid #ddd; border-radius: 10px; margin: 12px 0; overflow: hidden; }
-  .conv.hide { display: none; }
-  .conv-head { display: flex; gap: 10px; align-items: center; padding: 12px 14px; background: #f7f7f8; cursor: pointer; user-select: none; }
-  .conv-head:hover { background: #f0f0f2; }
-  .conv-head input { width: 18px; height: 18px; }
-  .caret { display: inline-block; transition: transform .15s; font-size: 12px; color: #666; }
-  .conv.open .caret { transform: rotate(90deg); }
-  .conv-name { font-weight: 700; font-size: 15px; flex: 1; }
-  .conv-count { color: #888; font-size: 13px; }
-  .conv-body { display: none; padding: 4px 12px 12px; }
-  .conv.open .conv-body { display: block; }
-  .item { display: flex; gap: 10px; padding: 9px 8px; border-bottom: 1px solid #f0f0f0; align-items: center; }
-  .item:last-child { border-bottom: none; }
-  .item.hide { display: none; }
-  .item input { width: 17px; height: 17px; }
-  .url { word-break: break-all; flex: 1; font-size: 14px; min-width: 0; }
-  .title { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
-  .title mark { background: #ffe9a8; padding: 0 1px; }
-  .status { font-size: 12px; padding: 2px 8px; border-radius: 10px; background: #eee; white-space: nowrap; }
-  .status.pending { background: #fff3cd; }
-  .status.queued { background: #d4edda; }
-  .muted { color: #888; font-size: 13px; }
+  body { background: #f5f5f5; }
+  .page { max-width: 980px; margin: 0 auto; padding: 28px 20px 60px; }
+  .title-mark { background: #ffe9a8; padding: 0 1px; }
 </style>
 </head>
 <body>
-<h1>📥 抖音视频选择台</h1>
-<p class="muted">流程：① 「从对话同步」拉取采集台对话框 → ② 勾选对话框并展开 → ③ 勾选视频标题 → ④ 批量处理（转写+整理+自动进 Notion）</p>
-<div class="bar">
-  <button onclick="syncPool()">🔄 从对话同步</button>
-  <button id="searchToggle" onclick="toggleSearch()">🔍 搜索</button>
-  <button onclick="submitSelected()">▶️ 批量处理选中项 (<span id="selN">0</span>)</button>
-  <span id="meta" class="muted"></span>
-</div>
-<div id="searchPanel">
-  <input id="searchInput" placeholder="搜索视频标题 / 作者 / 对话框名…（在全部已同步对话框内过滤）" oninput="render()">
-  <div class="chips">
-    <span class="chip" id="chipPending" onclick="toggleChip(this)">仅待处理</span>
-    <span class="muted">搜索范围：已同步的全部对话框</span>
-    <span class="muted" id="matchInfo"></span>
-    <span style="flex:1"></span>
-    <span class="chip" onclick="clearSearch()">✕ 清空并收起</span>
-  </div>
-</div>
-<div id="list"></div>
+<div id="root"></div>
 <script>
-let links = {}, convs = {};
-const selected = new Set();   // 跨渲染保留勾选
-let query = '', onlyPending = false, searchOpen = false;
+const h = React.createElement;
+const { ConfigProvider, Button, Input, Tag, CheckableTag, Checkbox, Collapse, List,
+        Badge, Space, Typography, message, Empty } = antd;
+const zhCN = (antd.locales && antd.locales.zh_CN) || undefined;
+const { Title, Text } = Typography;
 
-async function refresh() {
-  const r = await fetch('/inbox/api'); const d = await r.json();
-  links = d.links || {};
-  convs = d.conversations || {};
-  document.getElementById('meta').textContent =
-    `共 ${Object.keys(links).length} 条 · ${Object.keys(convs).length} 个对话框 · 更新于 ${d.updated_at || '-'}`;
-  render();
-}
+const STATUS_COLOR = { pending: 'gold', queued: 'green', done: 'default', failed: 'red' };
 
 function esc(s) { return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
-function hl(s) {
+function hl(s, query) {
   s = esc(s);
   if (!query) return s;
   const i = s.toLowerCase().indexOf(query.toLowerCase());
   if (i < 0) return s;
-  return s.slice(0, i) + '<mark>' + s.slice(i, i + query.length) + '</mark>' + s.slice(i + query.length);
+  return s.slice(0, i) + '<mark class="title-mark">' + s.slice(i, i + query.length) + '</mark>' + s.slice(i + query.length);
 }
 
-function groupByConv() {
-  const groups = {};
-  for (const [url, it] of Object.entries(links)) {
-    const cid = it.conv_id || '_legacy';
-    (groups[cid] = groups[cid] || []).push([url, it]);
+function App() {
+  const [links, setLinks] = React.useState({});
+  const [convs, setConvs] = React.useState({});
+  const [metaText, setMetaText] = React.useState('');
+  const [selected, setSelected] = React.useState(new Set());
+  const [query, setQuery] = React.useState('');
+  const [onlyPending, setOnlyPending] = React.useState(false);
+  const [searchOpen, setSearchOpen] = React.useState(false);
+  const [syncing, setSyncing] = React.useState(false);
+  const [openKeys, setOpenKeys] = React.useState([]);
+  const selectedRef = React.useRef(selected);
+  selectedRef.current = selected;
+
+  async function refresh() {
+    const r = await fetch('/inbox/api'); const d = await r.json();
+    const lk = d.links || {};
+    setLinks(lk);
+    setConvs(d.conversations || {});
+    setMetaText(`共 ${Object.keys(lk).length} 条 · ${Object.keys(d.conversations || {}).length} 个对话框 · 更新于 ${d.updated_at || '-'}`);
   }
-  for (const cid of Object.keys(groups))
-    groups[cid].sort((a, b) => (b[1].seq || 0) - (a[1].seq || 0));
-  return Object.entries(groups).sort((a, b) =>
-    (b[1][0]?.[1].seq || 0) - (a[1][0]?.[1].seq || 0));
-}
 
-function rowMatches(it, cid, cname) {
-  if (onlyPending && it.status !== 'pending') return false;
-  if (!query) return true;
-  const q = query.toLowerCase();
-  return (it.title || '').toLowerCase().includes(q)
-      || (it.author || '').toLowerCase().includes(q)
-      || (cname || '').toLowerCase().includes(q);
-}
-
-function render() {
-  query = document.getElementById('searchInput').value.trim();
-  const el = document.getElementById('list');
-  const groups = groupByConv();
-  if (!groups.length) {
-    el.innerHTML = '<p class="muted">池子是空的——先点「从对话同步」，或直接 POST /link 投递。</p>';
-    return;
+  function pickOne(url, checked) {
+    const next = new Set(selectedRef.current);
+    checked ? next.add(url) : next.delete(url);
+    setSelected(next);
   }
-  let totalMatch = 0, html = '';
-  for (const [cid, items] of groups) {
-    const meta = convs[cid] || {};
-    const name = cid === '_legacy' ? '（未分组 / 历史导入）' : (meta.name || cid);
-    const matched = items.filter(([, it]) => rowMatches(it, cid, name));
-    totalMatch += matched.length;
-    const convNameHit = query && name.toLowerCase().includes(query.toLowerCase());
-    const showConv = matched.length > 0 || (convNameHit && !onlyPending);
-    if (!showConv) continue;
-    const shown = matched.slice(0, 100);
-    const rows = shown.map(([url, it]) => `
-      <div class="item">
-        <input type="checkbox" class="pick" data-url="${url}" ${selected.has(url) ? 'checked' : ''} ${it.status === 'pending' ? '' : 'disabled'} onchange="pickOne(this)">
-        <div class="url">
-          <div class="title">${hl(it.title || '（标题待处理时补全）')}</div>
-          <div class="muted">${hl(it.author || '')} · <a href="${url}" target="_blank">打开视频</a> · ${it.added_at || ''}</div>
-        </div>
-        <span class="status ${it.status}">${it.status}</span>
-      </div>`).join('');
-    const more = matched.length > shown.length
-      ? `<p class="muted" style="padding:0 8px">仅显示前 100 条匹配（该对话共 ${matched.length} 条匹配）。</p>` : '';
-    const matchTip = query ? ` · 匹配 ${matched.length}/${items.length}` : '';
-    html += `
-      <div class="conv ${query ? 'open' : ''}" data-cid="${cid}">
-        <div class="conv-head" onclick="toggleConv(this)">
-          <input type="checkbox" class="pick-conv" onclick="event.stopPropagation(); toggleConvVideos(this)">
-          <span class="caret">▶</span>
-          <span class="conv-name">${hl(name)}</span>
-          <span class="conv-count">${items.length} 条视频${matchTip}${meta.last_seq ? ` · seq ${meta.last_seq}` : ''}</span>
-        </div>
-        <div class="conv-body">${rows}${more}</div>
-      </div>`;
+
+  function groupByConv() {
+    const groups = {};
+    for (const [url, it] of Object.entries(links)) {
+      const cid = it.conv_id || '_legacy';
+      (groups[cid] = groups[cid] || []).push([url, it]);
+    }
+    for (const cid of Object.keys(groups))
+      groups[cid].sort((a, b) => (b[1].seq || 0) - (a[1].seq || 0));
+    return Object.entries(groups).sort((a, b) =>
+      (b[1][0] && b[1][0][1].seq || 0) - (a[1][0] && a[1][0][1].seq || 0));
   }
-  el.innerHTML = html || '<p class="muted">没有匹配的视频——调整搜索词或筛选条件。</p>';
-  document.getElementById('matchInfo').textContent =
-    searchOpen ? `匹配 ${totalMatch} / ${Object.keys(links).length} 条` : '';
-  document.getElementById('selN').textContent = selected.size;
-}
 
-function toggleConv(head) { head.parentElement.classList.toggle('open'); }
+  function rowMatches(it, cname) {
+    if (onlyPending && it.status !== 'pending') return false;
+    if (!query) return true;
+    const q = query.toLowerCase();
+    return (it.title || '').toLowerCase().includes(q)
+        || (it.author || '').toLowerCase().includes(q)
+        || (cname || '').toLowerCase().includes(q);
+  }
 
-function toggleConvVideos(box) {
-  const conv = box.closest('.conv');
-  conv.classList.add('open');
-  conv.querySelectorAll('.pick:not(:disabled)').forEach(b => {
-    b.checked = box.checked;
-    box.checked ? selected.add(b.dataset.url) : selected.delete(b.dataset.url);
-  });
-  updateSelN();
-}
+  function toggleConvVideos(cid, matched, checked) {
+    const next = new Set(selectedRef.current);
+    matched.forEach(([url, it]) => {
+      if (it.status === 'pending') checked ? next.add(url) : next.delete(url);
+    });
+    setSelected(next);
+    setOpenKeys(keys => keys.includes(cid) ? keys : [...keys, cid]);
+  }
 
-function pickOne(cb) { cb.checked ? selected.add(cb.dataset.url) : selected.delete(cb.dataset.url); updateSelN(); }
-function updateSelN() { document.getElementById('selN').textContent = selected.size; }
+  async function syncPool() {
+    setSyncing(true);
+    try {
+      const r = await fetch('/inbox/sync', { method: 'POST' });
+      const d = await r.json();
+      if (!r.ok) { message.error('同步失败: ' + (d.detail || '')); return; }
+      message.success(`同步完成：新增 ${d.added} 条 · 共 ${d.total} 条 · ${d.conversations} 个对话框`);
+    } finally { setSyncing(false); }
+    refresh();
+  }
 
-function toggleSearch() {
-  searchOpen = !searchOpen;
-  document.getElementById('searchPanel').classList.toggle('open', searchOpen);
-  document.getElementById('searchToggle').style.background = searchOpen ? '#e8f0fe' : '';
-  if (!searchOpen) clearSearch(true);
-  else document.getElementById('searchInput').focus();
-}
-
-function toggleChip(el) {
-  el.classList.toggle('on');
-  onlyPending = el.classList.contains('on');
-  render();
-}
-
-function clearSearch(keepOpen) {
-  query = ''; onlyPending = false;
-  document.getElementById('searchInput').value = '';
-  document.getElementById('chipPending').classList.remove('on');
-  if (!keepOpen) { searchOpen = false; document.getElementById('searchPanel').classList.remove('open'); document.getElementById('searchToggle').style.background = ''; }
-  render();
-}
-
-async function syncPool() {
-  const btn = event.target; btn.disabled = true; btn.textContent = '⏳ 同步中...';
-  try {
-    const r = await fetch('/inbox/sync', {method: 'POST'});
+  async function submitSelected() {
+    if (!selected.size) { message.warning('请先勾选要处理的视频'); return; }
+    const r = await fetch('/inbox/select', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ urls: [...selected] }) });
     const d = await r.json();
-    if (!r.ok) { alert('同步失败: ' + (d.detail || '')); return; }
-    alert(`同步完成：新增 ${d.added} 条 · 共 ${d.total} 条 · ${d.conversations} 个对话框`);
-  } finally { btn.disabled = false; btn.textContent = '🔄 从对话同步'; }
-  refresh();
+    message.success(`已入队 ${d.queued} 条，后台开始处理（转写 → 整理 → 自动进 Notion）`);
+    setSelected(new Set());
+    refresh();
+  }
+
+  React.useEffect(() => { refresh(); }, []);
+
+  const groups = groupByConv();
+  const convItems = [];
+  let totalMatch = 0;
+  const autoOpen = [];
+  for (const [cid, items] of groups) {
+    const cm = convs[cid] || {};
+    const cname = cid === '_legacy' ? '（未分组 / 历史导入）' : (cm.name || cid);
+    const matched = items.filter(([, it]) => rowMatches(it, cname));
+    totalMatch += matched.length;
+    const convNameHit = query && cname.toLowerCase().includes(query.toLowerCase());
+    if (!(matched.length > 0 || (convNameHit && !onlyPending))) continue;
+    autoOpen.push(cid);
+    const shown = matched.slice(0, 100);
+    const matchTip = query ? ` · 匹配 ${matched.length}/${items.length}` : '';
+    const allPicked = shown.filter(([, it]) => it.status === 'pending').every(([url]) => selected.has(url)) && shown.some(([, it]) => it.status === 'pending');
+    convItems.push({
+      key: cid,
+      label: h(Space, { size: 10 },
+        h(Checkbox, {
+          checked: allPicked,
+          disabled: !shown.some(([, it]) => it.status === 'pending'),
+          onClick: e => e.stopPropagation(),
+          onChange: e => toggleConvVideos(cid, matched, e.target.checked),
+        }),
+        h('span', { style: { fontWeight: 700, fontSize: 15 },
+          dangerouslySetInnerHTML: { __html: hl(cname, query) } }),
+        h(Text, { type: 'secondary', style: { fontSize: 12 } },
+          `${items.length} 条视频${matchTip}${cm.last_seq ? ` · seq ${cm.last_seq}` : ''}`)
+      ),
+      children: h(React.Fragment, null,
+        h(List, {
+          size: 'small', dataSource: shown,
+          locale: { emptyText: '没有匹配的视频——调整搜索词或筛选条件' },
+          renderItem: ([url, it]) => h(List.Item, {
+            key: url,
+            actions: [h(Tag, { color: STATUS_COLOR[it.status] || 'default', style: { margin: 0 } }, it.status)],
+          },
+            h('div', { style: { display: 'flex', gap: 10, alignItems: 'flex-start', minWidth: 0 } },
+              h(Checkbox, {
+                checked: selected.has(url),
+                disabled: it.status !== 'pending',
+                onChange: e => pickOne(url, e.target.checked),
+              }),
+              h('div', { style: { minWidth: 0 } },
+                h('div', { style: { fontSize: 14, fontWeight: 600 },
+                  dangerouslySetInnerHTML: { __html: hl(it.title || '（标题待处理时补全）', query) } }),
+                h(Text, { type: 'secondary', style: { fontSize: 12 } },
+                  h('span', { dangerouslySetInnerHTML: { __html: hl(it.author || '', query) } }),
+                  ' · ',
+                  h('a', { href: url, target: '_blank', style: { color: '#1677ff' } }, '打开视频'),
+                  it.added_at ? ` · ${it.added_at}` : '')
+              )
+            ))
+        }),
+        matched.length > shown.length
+          ? h(Text, { type: 'secondary', style: { fontSize: 12, paddingLeft: 8 } },
+              `仅显示前 100 条匹配（该对话共 ${matched.length} 条匹配）。`)
+          : null
+      ),
+    });
+  }
+
+  const activeKeys = query ? autoOpen : openKeys;
+
+  return h('div', { className: 'page' },
+    h(Title, { level: 4, style: { marginTop: 0 } }, '📥 抖音视频选择台'),
+    h(Alert_flow),
+    h(Space, { wrap: true, style: { margin: '14px 0' } },
+      h(Button, { type: 'primary', loading: syncing, onClick: syncPool }, '🔄 从对话同步'),
+      h(Button, { type: searchOpen ? 'default' : 'text', onClick: () => {
+        setSearchOpen(v => !v); if (searchOpen) { setQuery(''); setOnlyPending(false); }
+      } }, '🔍 搜索'),
+      h(Badge, { count: selected.size, color: '#1677ff' },
+        h(Button, { type: 'primary', ghost: true, onClick: submitSelected }, '▶️ 批量处理选中项')),
+      h(Text, { type: 'secondary', style: { fontSize: 12 } }, metaText)
+    ),
+    searchOpen && h('div', { style: { border: '1px solid #d9d9d9', borderRadius: 10, padding: '12px 14px', marginBottom: 14, background: '#fafafa' } },
+      h(Input, {
+        placeholder: '搜索视频标题 / 作者 / 对话框名…（在全部已同步对话框内过滤）',
+        allowClear: true, value: query, autoFocus: true,
+        onChange: e => setQuery(e.target.value.trim()), style: { marginBottom: 10 },
+      }),
+      h(Space, { wrap: true, size: 12 },
+        h(CheckableTag, { checked: onlyPending, onChange: v => setOnlyPending(v) }, '仅待处理'),
+        h(Text, { type: 'secondary', style: { fontSize: 12 } }, '搜索范围：已同步的全部对话框'),
+        h(Text, { type: 'secondary', style: { fontSize: 12 } },
+          searchOpen ? `匹配 ${totalMatch} / ${Object.keys(links).length} 条` : '')
+      )
+    ),
+    convItems.length
+      ? h(Collapse, {
+          items: convItems, activeKey: activeKeys,
+          onChange: keys => setOpenKeys(Array.isArray(keys) ? keys : [keys]),
+          style: { background: '#fff' },
+        })
+      : h(Empty, { description: '池子是空的——先点「从对话同步」，或直接 POST /link 投递' })
+  );
 }
 
-async function submitSelected() {
-  if (!selected.size) { alert('请先勾选要处理的视频'); return; }
-  const r = await fetch('/inbox/select', {method: 'POST',
-    headers: {'Content-Type': 'application/json'}, body: JSON.stringify({urls: [...selected]})});
-  const d = await r.json();
-  alert(`已入队 ${d.queued} 条，后台开始处理（转写 → 整理 → 自动进 Notion）`);
-  selected.clear(); updateSelN();
-  refresh();
+// 流程说明（antd Alert 展示）
+function Alert_flow() {
+  return h('div', {
+    style: { background: '#e6f4ff', border: '1px solid #91caff', borderRadius: 8, padding: '8px 12px', fontSize: 13, color: '#1677ff' },
+  }, '流程：① 「从对话同步」拉取采集台对话框 → ② 勾选对话框并展开 → ③ 勾选视频标题 → ④ 批量处理（转写+整理+自动进 Notion）');
 }
-refresh();
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  h(ConfigProvider, { locale: zhCN }, h(App))
+);
 </script>
 </body>
 </html>"""

@@ -54,27 +54,24 @@ class TestInboxApi:
         assert "text/html" in r.headers["content-type"]
         assert "选择台" in r.text
 
-    def test_inbox_page_has_search_and_accordion(self, tmp_path, monkeypatch):
-        """手风琴两级勾选 + 可展开搜索（默认关闭，展开后在对话内过滤）。"""
-        _seed_pool(tmp_path, monkeypatch, {})
-        r = client.get("/inbox")
-        html = r.text
-        assert "pick-conv" in html          # 对话框级整选勾选框
-        assert "toggleConv" in html         # 手风琴展开/收起
-        assert "searchToggle" in html       # 搜索开关按钮
-        assert "searchPanel" in html        # 可展开搜索面板
-        assert "searchInput" in html        # 标题过滤输入框
-        assert "仅待处理" in html           # 状态筛选 chip
-
-    def test_inbox_page_has_search_and_accordion(self, tmp_path, monkeypatch):
-        """选定方案：手风琴两级勾选 + 可展开搜索（方案1+7）。"""
+    def test_inbox_page_uses_antd_components(self, tmp_path, monkeypatch):
+        """2C 改造：inbox 页面基于 antd UMD 真组件（手风琴 Collapse + 两级勾选 + 搜索）。"""
         _seed_pool(tmp_path, monkeypatch, {})
         html = client.get("/inbox").text
-        assert "searchPanel" in html  # 可展开搜索面板
-        assert "toggleSearch" in html  # 搜索开关
-        assert "pick-conv" in html  # 会话级勾选
-        assert "toggleConv" in html  # 手风琴展开
-        assert "Search scope" not in html and "搜索范围" in html  # 搜索范围提示
+        assert "/static/antd/antd.min.js" in html
+        assert "/static/antd/react.production.min.js" in html
+        assert "/static/antd/reset.min.css" in html
+        assert 'id="root"' in html
+        assert "Collapse" in html        # 手风琴（对话框折叠）
+        assert "Checkbox" in html        # 两级勾选
+        assert "CheckableTag" in html    # 仅待处理筛选 chip
+        assert "List" in html            # 视频行数据展示（antd List）
+        assert "Button" in html          # 按钮
+        assert "message" in html         # 操作反馈
+        assert "仅待处理" in html
+        assert "从对话同步" in html
+        assert "批量处理选中项" in html
+        assert "搜索视频标题" in html
 
 
 class TestInboxSelect:

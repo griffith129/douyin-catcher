@@ -141,6 +141,22 @@ class TestNotionDesktopUrls:
             == "notion://www.notion.so/Page-Title-abc123"
         )
 
+    def test_helper_converts_app_notion_domain(self):
+        """生产数据存在 app.notion.com/p/<标题>-<页面ID> 形态，提取 ID 转桌面端深链。"""
+        assert (
+            demo_mod.to_notion_desktop_url(
+                "https://app.notion.com/p/100-4148b2bb783381908b16e43710427947"
+            )
+            == "notion://www.notion.so/4148b2bb783381908b16e43710427947"
+        )
+        # 无标题前缀的纯 ID 形态
+        assert (
+            demo_mod.to_notion_desktop_url(
+                "https://app.notion.com/p/4148b2bb783381908b16e43710427947"
+            )
+            == "notion://www.notion.so/4148b2bb783381908b16e43710427947"
+        )
+
     def test_helper_keeps_non_notion_urls(self):
         assert demo_mod.to_notion_desktop_url("https://example.com/x") == "https://example.com/x"
         assert demo_mod.to_notion_desktop_url("") == ""
@@ -182,3 +198,35 @@ class TestNotionDesktopUrls:
         r = client.get("/kb")
         assert r.status_code == 200
         assert "/kb/api?desktop=1" in r.text
+
+
+class TestAntdUi:
+    """2C 改造：kb/inbox 页面基于 antd UMD 真组件（本地 static，离线可用）。"""
+
+    def test_static_antd_files_served(self):
+        for path in (
+            "/static/antd/antd.min.js",
+            "/static/antd/react.production.min.js",
+            "/static/antd/react-dom.production.min.js",
+            "/static/antd/dayjs.min.js",
+            "/static/antd/reset.min.css",
+        ):
+            assert client.get(path).status_code == 200, path
+
+    def test_kb_page_uses_antd(self, tmp_path, monkeypatch):
+        _seed_demo_data(tmp_path, monkeypatch)
+        html = client.get("/kb").text
+        assert "/static/antd/antd.min.js" in html
+        assert "/static/antd/react.production.min.js" in html
+        assert "/static/antd/react-dom.production.min.js" in html
+        assert "/static/antd/dayjs.min.js" in html
+        assert "/static/antd/reset.min.css" in html
+        assert 'id="root"' in html
+        # 导航 / 数据展示 / 布局 / 按钮 / 反馈：各至少一个 antd 组件
+        assert "Breadcrumb" in html   # 导航
+        assert "Table" in html        # 数据展示
+        assert "Tag" in html          # 数据展示
+        assert "Descriptions" in html # 数据展示（抽屉详情）
+        assert "Empty" in html        # 数据展示（空态）
+        assert "Button" in html       # 按钮
+        assert "Drawer" in html       # 反馈（详情抽屉）

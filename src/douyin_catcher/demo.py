@@ -21,6 +21,36 @@ _TAXONOMY_FILE = Path("data/categories.json")
 _BATCHES_FILE = Path("data/batches.json")
 _META_FILE = Path("data/demo_meta.json")
 
+_NOTION_HTTPS_PREFIX = "https://www.notion.so"
+
+
+def to_notion_desktop_url(url: str) -> str:
+    """把 Notion 页面链接转成 notion:// 协议，浏览器点击即拉起 Notion 桌面端。
+
+    非 Notion 链接（抖音来源等）原样返回；空值返回空串。
+    """
+    if url and url.startswith(_NOTION_HTTPS_PREFIX):
+        return "notion://" + url[len("https://"):]
+    return url or ""
+
+
+def _apply_desktop_urls(payload: dict) -> dict:
+    """深拷贝 payload，把 index 与批次条目中的 notion_url 改为桌面端形态。"""
+    import copy
+
+    out = copy.deepcopy(payload)
+    for entry in out.get("index", []):
+        if entry.get("notion_url"):
+            entry["notion_url"] = to_notion_desktop_url(entry["notion_url"])
+    for batch in out.get("batches", []):
+        for item in batch.get("items", []):
+            if item.get("notion_url"):
+                item["notion_url"] = to_notion_desktop_url(item["notion_url"])
+    for key in ("database_url", "log_url", "log_url_v2"):
+        if out.get("meta", {}).get(key):
+            out["meta"][key] = to_notion_desktop_url(out["meta"][key])
+    return out
+
 
 def _demo_payload() -> dict:
     categories: dict = {}
@@ -493,7 +523,7 @@ _CAT_ACCORDION = """<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8">
 let DATA=null, active=null, curId=null;
 const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 async function init(){
- DATA=await (await fetch('/demo/api')).json();
+ DATA=await (await fetch('/kb/api?desktop=1')).json();
  const cats=Object.keys(DATA.categories).filter(c=>DATA.index.some(e=>e.category===c));
  document.getElementById('btnrow').innerHTML=cats.map(c=>{
   const n=DATA.index.filter(e=>e.category===c).length;
@@ -631,8 +661,10 @@ def register(app):
         return _CAT_ACCORDION.replace("__CSS__", _CSS)
 
     @app.get("/kb/api")
-    async def kb_api():
-        return _demo_payload()
+    async def kb_api(desktop: bool = False):
+        """desktop=1 时 notion_url 转为 notion:// 形态，页面点击直接拉起 Notion 桌面端。"""
+        payload = _demo_payload()
+        return _apply_desktop_urls(payload) if desktop else payload
 
     @app.get("/demo/titles", response_class=HTMLResponse)
     async def demo_titles():

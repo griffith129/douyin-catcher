@@ -105,7 +105,7 @@ class TestUxPages:
         _seed_demo_data(tmp_path, monkeypatch)
         r = client.get("/demo/cat-accordion")
         assert r.status_code == 200
-        assert "/demo/api" in r.text
+        assert "/kb/api?desktop=1" in r.text  # 手风琴与 /kb 共用模板，同样桌面端直开
 
     def test_titles_preview(self, tmp_path, monkeypatch):
         _seed_demo_data(tmp_path, monkeypatch)
@@ -121,7 +121,7 @@ class TestKnowledgeBasePage:
         _seed_demo_data(tmp_path, monkeypatch)
         r = client.get("/kb")
         assert r.status_code == 200
-        assert "/demo/api" in r.text  # 数据源 = 索引/分类/批次（autotax 自动追加）
+        assert "/kb/api?desktop=1" in r.text  # 数据源 = 索引/分类/批次（autotax 自动追加，桌面端直开）
 
     def test_kb_page_same_as_accordion(self, tmp_path, monkeypatch):
         _seed_demo_data(tmp_path, monkeypatch)
@@ -130,3 +130,55 @@ class TestKnowledgeBasePage:
     def test_kb_api_matches_demo_api(self, tmp_path, monkeypatch):
         _seed_demo_data(tmp_path, monkeypatch)
         assert client.get("/kb/api").json() == client.get("/demo/api").json()
+
+
+class TestNotionDesktopUrls:
+    """功能：知识库「打开 Notion 总结文档」直接在 Notion 桌面端打开（notion:// 协议）。"""
+
+    def test_helper_converts_notion_url(self):
+        assert (
+            demo_mod.to_notion_desktop_url("https://www.notion.so/Page-Title-abc123")
+            == "notion://www.notion.so/Page-Title-abc123"
+        )
+
+    def test_helper_keeps_non_notion_urls(self):
+        assert demo_mod.to_notion_desktop_url("https://example.com/x") == "https://example.com/x"
+        assert demo_mod.to_notion_desktop_url("") == ""
+        assert demo_mod.to_notion_desktop_url("u1") == "u1"
+
+    def test_helper_keeps_douyin_source(self):
+        assert demo_mod.to_notion_desktop_url("https://www.douyin.com/video/1") == (
+            "https://www.douyin.com/video/1"
+        )
+
+    def test_kb_api_desktop_param_rewrites_notion_urls(self, tmp_path, monkeypatch):
+        _seed_demo_data(tmp_path, monkeypatch)
+        # 种子数据里的 notion_url 是 Notion 页面形态才好验证转换
+        (tmp_path / "note_index.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "aweme_id": "111", "title": "视频一", "author": "甲", "date": "2026-11-06",
+                        "source_url": "https://www.douyin.com/video/1", "file": "a.md", "preview": "x",
+                        "category": "AI Agent 与工作流", "subcategory": "工具调用",
+                        "notion_url": "https://www.notion.so/Note-One-abc",
+                    }
+                ],
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        body = client.get("/kb/api", params={"desktop": "1"}).json()
+        assert body["index"][0]["notion_url"] == "notion://www.notion.so/Note-One-abc"
+        # 抖音来源不受影响
+        assert body["index"][0]["source_url"] == "https://www.douyin.com/video/1"
+
+    def test_kb_api_default_unchanged(self, tmp_path, monkeypatch):
+        _seed_demo_data(tmp_path, monkeypatch)
+        assert client.get("/kb/api").json() == client.get("/demo/api").json()
+
+    def test_kb_page_uses_desktop_api(self, tmp_path, monkeypatch):
+        _seed_demo_data(tmp_path, monkeypatch)
+        r = client.get("/kb")
+        assert r.status_code == 200
+        assert "/kb/api?desktop=1" in r.text

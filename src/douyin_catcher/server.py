@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from .config import config
+from .demo import register as register_demo
 from .inbox import load_pool, sync_inbox
 from .parser import extract_urls
 from .pipeline import process_link
@@ -44,6 +45,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="douyin-catcher", lifespan=lifespan)
+register_demo(app)  # /demo 体验层（只读，不影响 MVP 路由）
 
 
 class LinkBody(BaseModel):

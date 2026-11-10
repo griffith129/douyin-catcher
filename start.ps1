@@ -1,7 +1,7 @@
 # ============================================================
 # douyin-catcher full suite launcher
-# Starts: douyin-chat-export (:8000) + douyin-catcher (:8787)
-# Health-checks: LLM reverse proxy (:7864, owned by WorkBuddy)
+# Starts: LLM API stack (wb2api gateway :7863 + bridge :7864)
+#         + douyin-chat-export (:8000) + douyin-catcher (:8787)
 # Usage: right-click -> Run with PowerShell, or: powershell -File start.ps1
 # ============================================================
 
@@ -10,6 +10,9 @@ $ErrorActionPreference = "Stop"
 $catcher = $PSScriptRoot
 $parent = Split-Path $catcher -Parent
 $exporter = Join-Path $parent "douyin-chat-export"
+
+# LLM API 栈（wb2api-win：网关 7863 + Codex 协议桥 7864）所在目录；路径变化时改这里
+$wb2apiDir = "D:\AAA——WorkBuddy工作默认文件夹\积分管理\wb2api-win"
 
 function Test-Port([int]$port) {
     $client = New-Object System.Net.Sockets.TcpClient
@@ -25,6 +28,32 @@ function Test-Port([int]$port) {
 }
 
 Write-Host "=== douyin-catcher suite launcher ===" -ForegroundColor Cyan
+
+# --- 0) LLM API stack (wb2api gateway :7863 + bridge :7864) ---
+if (Test-Port 7864) {
+    Write-Host "[=] LLM API stack already running on :7864"
+} elseif (Test-Path (Join-Path $wb2apiDir "start_all.bat")) {
+    Write-Host "[+] starting LLM API stack (gateway :7863 + bridge :7864) ..."
+    Start-Process -FilePath "cmd.exe" `
+        -ArgumentList "/c", (Join-Path $wb2apiDir "start_all.bat") `
+        -WorkingDirectory $wb2apiDir -WindowStyle Minimized
+    Write-Host "[...] waiting for LLM bridge :7864 (max 40s) ..."
+    $ok7864 = $false
+    for ($i = 0; $i -lt 20; $i++) {
+        Start-Sleep -Seconds 2
+        if (Test-Port 7864) { $ok7864 = $true; break }
+    }
+    if ($ok7864) {
+        Write-Host "[OK] LLM API              ->  http://127.0.0.1:7864" -ForegroundColor Green
+    } else {
+        Write-Host "[FAIL] LLM API bridge did not come up" -ForegroundColor Red
+        Write-Host "       Check logs: $wb2apiDir\logs\bridge.log / gateway.log" -ForegroundColor Yellow
+        Write-Host "       Video processing will fail at the summary step until it is up." -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "[!] wb2api-win not found at $wb2apiDir (skipped)" -ForegroundColor Yellow
+    Write-Host "    Edit `$wb2apiDir at the top of this script if the path changed." -ForegroundColor Yellow
+}
 
 # --- 1) douyin-chat-export (port 8000) ---
 if (Test-Port 8000) {
@@ -64,13 +93,13 @@ else        { Write-Host "[FAIL] douyin-chat-export did not come up (check its w
 if ($ok8787) { Write-Host "[OK] douyin-catcher      ->  http://127.0.0.1:8787" -ForegroundColor Green }
 else         { Write-Host "[FAIL] douyin-catcher did not come up (check its window/logs)" -ForegroundColor Red }
 
-# --- 4) LLM reverse proxy health check (owned by WorkBuddy, cannot be started here) ---
+# --- 4) LLM bridge status (started in step 0 via wb2api-win start_all.bat) ---
 if (Test-Port 7864) {
     Write-Host "[OK] LLM reverse proxy   ->  http://127.0.0.1:7864" -ForegroundColor Green
 } else {
-    Write-Host "[WARN] LLM reverse proxy :7864 is DOWN." -ForegroundColor Yellow
-    Write-Host "       It belongs to WorkBuddy - start/keep the WorkBuddy app running." -ForegroundColor Yellow
-    Write-Host "       Video processing will fail at the summary step until it is up." -ForegroundColor Yellow
+    Write-Host "[WARN] LLM bridge :7864 is DOWN." -ForegroundColor Yellow
+    Write-Host "       Re-run this script, or start it manually: $wb2apiDir\start_all.bat" -ForegroundColor Yellow
+    Write-Host "       Check logs: $wb2apiDir\logs\bridge.log" -ForegroundColor Yellow
 }
 
 # --- 4.5) douyin login state check (real browser probe, may take ~15s) ---
